@@ -1,8 +1,8 @@
 package responses
 
 import (
-	"github.com/lich0821/ccNexus/internal/transformer"
-	"github.com/lich0821/ccNexus/internal/transformer/convert"
+	"github.com/carbe/ccNexus/internal/transformer"
+	"github.com/carbe/ccNexus/internal/transformer/convert"
 )
 
 // ClaudeTransformer transforms Codex Responses requests to Claude format

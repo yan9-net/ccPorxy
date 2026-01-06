@@ -31,14 +31,20 @@ func getClaudeProjectsDir() string {
 	return filepath.Join(home, ".claude", "projects")
 }
 
-// getAliasFilePath returns the path to the Claude Code alias file
+// getAliasFilePath returns the path to the alias file
 func getAliasFilePath() string {
-	return filepath.Join(getClaudeProjectsDir(), "aliases.json")
+	var home string
+	if runtime.GOOS == "windows" {
+		home = os.Getenv("USERPROFILE")
+	} else {
+		home = os.Getenv("HOME")
+	}
+	return filepath.Join(home, ".claude", "cc-tool", "aliases.json")
 }
 
 // encodeProjectPath encodes a project path to Claude Code's directory name format
 // Claude Code encodes paths by replacing special characters with hyphens
-// Example: E:\GitStudy\exam_system -> E--GitStudy-exam-system
+// Example: E:\OthProjects\ccNexus -> E--OthProjects-ccNexus
 func encodeProjectPath(projectPath string) string {
 	// Normalize to forward slashes first
 	normalized := filepath.ToSlash(projectPath)
@@ -46,10 +52,9 @@ func encodeProjectPath(projectPath string) string {
 	normalized = strings.TrimSuffix(normalized, "/")
 
 	// Replace special characters with hyphens
-	// : / and _ are replaced with -
+	// : and / are replaced with -
 	encoded := strings.ReplaceAll(normalized, ":", "-")
 	encoded = strings.ReplaceAll(encoded, "/", "-")
-	encoded = strings.ReplaceAll(encoded, "_", "-")
 
 	return encoded
 }

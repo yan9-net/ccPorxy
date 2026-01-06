@@ -5,9 +5,9 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/lich0821/ccNexus/internal/config"
-	"github.com/lich0821/ccNexus/internal/logger"
-	"github.com/lich0821/ccNexus/internal/transformer"
+	"github.com/carbe/ccNexus/internal/config"
+	"github.com/carbe/ccNexus/internal/logger"
+	"github.com/carbe/ccNexus/internal/transformer"
 )
 
 // handleNonStreamingResponse processes non-streaming responses

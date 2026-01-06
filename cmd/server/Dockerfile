@@ -36,9 +36,7 @@ RUN mkdir -p /data
 COPY --from=builder /app/ccnexus-server /app/ccnexus-server
 
 # Environment variables
-ENV CCNEXUS_DATA_DIR=/data
 ENV CCNEXUS_PORT=3000
-ENV CCNEXUS_DB_PATH=/data/ccnexus.db
 
 # Expose HTTP API port
 EXPOSE 3000

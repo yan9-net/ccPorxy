@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/lich0821/ccNexus/internal/transformer"
+	"github.com/carbe/ccNexus/internal/transformer"
 )
 
 // ClaudeReqToGemini converts Claude request to Gemini request

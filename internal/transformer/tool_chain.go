@@ -7,7 +7,7 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/lich0821/ccNexus/internal/logger"
+	"github.com/carbe/ccNexus/internal/logger"
 )
 
 // ToolChainHandler handles tool chain execution

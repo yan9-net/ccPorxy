@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/lich0821/ccNexus/internal/transformer"
+	"github.com/carbe/ccNexus/internal/transformer"
 )
 
 // ClaudeReqToOpenAI converts Claude request to OpenAI Chat request
@@ -629,4 +629,3 @@ func extractToolResultContent(content interface{}) string {
 	}
 	return ""
 }
-

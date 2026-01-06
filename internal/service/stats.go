@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/lich0821/ccNexus/internal/config"
-	"github.com/lich0821/ccNexus/internal/proxy"
+	"github.com/carbe/ccNexus/internal/config"
+	"github.com/carbe/ccNexus/internal/proxy"
 )
 
 // StatsService handles statistics operations

@@ -1,177 +1,167 @@
-import { api } from '../api.js';
-import { state } from '../state.js';
-import { notifications } from '../utils/notifications.js';
-import { formatNumber, formatTokens } from '../utils/formatters.js';
+// Dashboard Component
+const DashboardComponent = {
+    template: `
+        <div class="dashboard">
+            <div class="page-header">
+                <h1 class="page-title">
+                    <el-icon><Monitor /></el-icon>
+                    仪表盘
+                </h1>
+            </div>
 
-class Dashboard {
-    constructor() {
-        this.container = document.getElementById('view-container');
-    }
+            <div class="stats-grid">
+                <div class="stat-card primary">
+                    <div class="stat-label">总请求数</div>
+                    <div class="stat-value">{{ formatNumber(stats.TotalRequests || 0) }}</div>
+                </div>
+                <div class="stat-card success">
+                    <div class="stat-label">成功率</div>
+                    <div class="stat-value">{{ successRate }}<span class="stat-suffix">%</span></div>
+                </div>
+                <div class="stat-card warning">
+                    <div class="stat-label">输入 Token</div>
+                    <div class="stat-value">{{ formatNumber(stats.TotalInputTokens || 0) }}</div>
+                </div>
+                <div class="stat-card info">
+                    <div class="stat-label">输出 Token</div>
+                    <div class="stat-value">{{ formatNumber(stats.TotalOutputTokens || 0) }}</div>
+                </div>
+            </div>
 
-    async render() {
-        this.container.innerHTML = `
-            <div class="dashboard">
-                <h1>Dashboard</h1>
-                <div id="stats-cards" class="grid grid-cols-4 mt-3">
-                    <div class="stat-card">
-                        <div class="stat-label">Total Requests</div>
-                        <div class="stat-value" id="stat-requests">-</div>
+            <div class="grid-2">
+                <div class="content-card">
+                    <div class="card-header">
+                        <span class="card-title">
+                            <el-icon><Link /></el-icon>
+                            活跃节点
+                        </span>
                     </div>
-                    <div class="stat-card">
-                        <div class="stat-label">Success Rate</div>
-                        <div class="stat-value" id="stat-success">-</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-label">Input Tokens</div>
-                        <div class="stat-value" id="stat-input-tokens">-</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-label">Output Tokens</div>
-                        <div class="stat-value" id="stat-output-tokens">-</div>
+                    <div class="card-body">
+                        <el-table :data="enabledEndpoints" stripe v-loading="loading">
+                            <el-table-column prop="name" label="名称" />
+                            <el-table-column prop="transformer" label="类型">
+                                <template #default="{ row }">
+                                    <el-tag size="small">{{ getTransformerLabel(row.transformer) }}</el-tag>
+                                </template>
+                            </el-table-column>
+                            <el-table-column label="状态" width="100">
+                                <template #default>
+                                    <div class="endpoint-status">
+                                        <span class="status-dot online"></span>
+                                        <span>在线</span>
+                                    </div>
+                                </template>
+                            </el-table-column>
+                        </el-table>
+                        <div v-if="enabledEndpoints.length === 0 && !loading" class="empty-state">
+                            <el-icon><Link /></el-icon>
+                            <div class="empty-title">暂无节点</div>
+                            <div class="empty-desc">请先添加节点</div>
+                        </div>
                     </div>
                 </div>
 
-                <div class="grid grid-cols-2 mt-4">
-                    <div class="card">
-                        <div class="card-header">
-                            <h3 class="card-title">Active Endpoints</h3>
-                        </div>
-                        <div class="card-body">
-                            <div id="endpoints-list"></div>
-                        </div>
+                <div class="content-card">
+                    <div class="card-header">
+                        <span class="card-title">
+                            <el-icon><DataLine /></el-icon>
+                            请求统计
+                        </span>
                     </div>
-
-                    <div class="card">
-                        <div class="card-header">
-                            <h3 class="card-title">Recent Activity</h3>
-                        </div>
-                        <div class="card-body">
-                            <canvas id="activity-chart"></canvas>
+                    <div class="card-body">
+                        <div class="chart-container">
+                            <canvas ref="chartRef"></canvas>
                         </div>
                     </div>
                 </div>
             </div>
-        `;
+        </div>
+    `,
+    setup() {
+        const { ref, computed, onMounted, nextTick } = Vue;
+        
+        const loading = ref(true);
+        const stats = ref({});
+        const endpoints = ref([]);
+        const dailyStats = ref({});
+        const chartRef = ref(null);
+        let chartInstance = null;
 
-        await this.loadData();
-    }
+        const enabledEndpoints = computed(() => endpoints.value.filter(ep => ep.enabled));
 
-    async loadData() {
-        try {
-            // Load stats
-            const stats = await api.getStatsSummary();
-            this.updateStats(stats);
+        const successRate = computed(() => {
+            const total = stats.value.TotalRequests || 0;
+            const errors = stats.value.TotalErrors || 0;
+            if (total === 0) return '0.0';
+            return ((total - errors) / total * 100).toFixed(1);
+        });
 
-            // Load endpoints
-            const endpointsData = await api.getEndpoints();
-            this.updateEndpoints(endpointsData.endpoints);
+        const formatNumber = (num) => utils.formatNumber(num);
+        const getTransformerLabel = (t) => utils.getTransformerLabel(t);
 
-            // Load daily stats for chart
-            const dailyStats = await api.getStatsDaily();
-            this.renderChart(dailyStats);
-        } catch (error) {
-            notifications.error('Failed to load dashboard data: ' + error.message);
-        }
-    }
+        const loadData = async () => {
+            loading.value = true;
+            try {
+                const [statsData, endpointsData, daily] = await Promise.all([
+                    api.getStatsSummary(),
+                    api.getEndpoints(),
+                    api.getStatsDaily()
+                ]);
+                stats.value = statsData;
+                endpoints.value = endpointsData.endpoints || [];
+                dailyStats.value = daily.stats || {};
+                await nextTick();
+                renderChart();
+            } catch (error) {
+                ElementPlus.ElMessage.error('加载数据失败: ' + error.message);
+            } finally {
+                loading.value = false;
+            }
+        };
 
-    updateStats(stats) {
-        const totalRequests = stats.TotalRequests || 0;
-        const totalErrors = stats.TotalErrors || 0;
-        const successRate = totalRequests > 0
-            ? ((totalRequests - totalErrors) / totalRequests * 100).toFixed(1)
-            : 0;
+        const renderChart = () => {
+            if (!chartRef.value) return;
+            if (chartInstance) chartInstance.destroy();
 
-        document.getElementById('stat-requests').textContent = formatNumber(totalRequests);
-        document.getElementById('stat-success').textContent = successRate + '%';
-        document.getElementById('stat-input-tokens').textContent = formatTokens(stats.TotalInputTokens || 0);
-        document.getElementById('stat-output-tokens').textContent = formatTokens(stats.TotalOutputTokens || 0);
-    }
+            const epStats = dailyStats.value.endpoints || {};
+            const labels = Object.keys(epStats);
+            const data = labels.map(ep => epStats[ep].requests || 0);
 
-    updateEndpoints(endpoints) {
-        const container = document.getElementById('endpoints-list');
-
-        if (!endpoints || endpoints.length === 0) {
-            container.innerHTML = '<div class="empty-state"><p>No endpoints configured</p></div>';
-            return;
-        }
-
-        const enabledEndpoints = endpoints.filter(ep => ep.enabled);
-
-        if (enabledEndpoints.length === 0) {
-            container.innerHTML = '<div class="empty-state"><p>No enabled endpoints</p></div>';
-            return;
-        }
-
-        container.innerHTML = `
-            <div class="table-container">
-                <table class="table">
-                    <thead>
-                        <tr>
-                            <th>Name</th>
-                            <th>Type</th>
-                            <th>Status</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${enabledEndpoints.map(ep => `
-                            <tr>
-                                <td>${this.escapeHtml(ep.name)}</td>
-                                <td>${this.escapeHtml(ep.transformer)}</td>
-                                <td>
-                                    <span class="status-indicator online"></span>
-                                    <span class="badge badge-success">Active</span>
-                                </td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
-            </div>
-        `;
-    }
-
-    renderChart(dailyStats) {
-        const canvas = document.getElementById('activity-chart');
-        const ctx = canvas.getContext('2d');
-
-        // Simple bar chart showing requests
-        const stats = dailyStats.stats || {};
-        const endpoints = Object.keys(stats.endpoints || {});
-        const requests = endpoints.map(ep => stats.endpoints[ep].requests || 0);
-
-        new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels: endpoints,
-                datasets: [{
-                    label: 'Requests',
-                    data: requests,
-                    backgroundColor: '#3b82f6',
-                    borderColor: '#2563eb',
-                    borderWidth: 1
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: true,
-                plugins: {
-                    legend: {
-                        display: false
-                    }
+            chartInstance = new Chart(chartRef.value, {
+                type: 'bar',
+                data: {
+                    labels,
+                    datasets: [{
+                        label: '请求数',
+                        data,
+                        backgroundColor: 'rgba(64, 158, 255, 0.8)',
+                        borderColor: '#409eff',
+                        borderWidth: 1,
+                        borderRadius: 4
+                    }]
                 },
-                scales: {
-                    y: {
-                        beginAtZero: true
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.05)' } },
+                        x: { grid: { display: false } }
                     }
                 }
-            }
+            });
+        };
+
+        onMounted(() => {
+            loadData();
+            window.addEventListener('stats-update', (e) => {
+                if (e.detail.stats) stats.value = e.detail.stats;
+            });
         });
-    }
 
-    escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
+        return {
+            loading, stats, enabledEndpoints, successRate, chartRef,
+            formatNumber, getTransformerLabel
+        };
     }
-}
-
-export const dashboard = new Dashboard();
+};

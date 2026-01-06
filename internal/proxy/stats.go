@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lich0821/ccNexus/internal/logger"
+	"github.com/carbe/ccNexus/internal/logger"
 )
 
 // DailyStats represents statistics for a single day
@@ -64,9 +64,9 @@ type DailyRecord struct {
 
 // Stats represents overall proxy statistics
 type Stats struct {
-	storage       StatsStorage
-	deviceID      string
-	mu            sync.RWMutex
+	storage  StatsStorage
+	deviceID string
+	mu       sync.RWMutex
 
 	// Save optimization
 	savePending   bool
@@ -217,7 +217,6 @@ func (s *Stats) Load() error {
 	// With SQLite, stats are loaded on demand from storage
 	return nil
 }
-
 
 // GetPeriodStats returns aggregated statistics for a time period
 func (s *Stats) GetPeriodStats(startDate, endDate string) map[string]*DailyStats {

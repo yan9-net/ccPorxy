@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/lich0821/ccNexus/internal/transformer"
+	"github.com/carbe/ccNexus/internal/transformer"
 )
 
 // ClaudeReqToOpenAI2 converts Claude request to OpenAI Responses API request
@@ -335,7 +335,7 @@ func ClaudeStreamToOpenAI2(event []byte, ctx *transformer.StreamContext) ([]byte
 			partial := delta["partial_json"].(string)
 			ctx.ToolArguments += partial
 			writeEvent(map[string]interface{}{
-				"type": "response.function_call_arguments.delta",
+				"type":         "response.function_call_arguments.delta",
 				"output_index": ctx.ToolIndex, "delta": partial,
 			})
 		}
@@ -347,7 +347,7 @@ func ClaudeStreamToOpenAI2(event []byte, ctx *transformer.StreamContext) ([]byte
 		if ctx.ToolBlockStarted && blockIdx == ctx.ToolIndex {
 			// function_call_arguments.done
 			writeEvent(map[string]interface{}{
-				"type": "response.function_call_arguments.done",
+				"type":         "response.function_call_arguments.done",
 				"output_index": blockIdx, "arguments": ctx.ToolArguments,
 			})
 			// output_item.done for function_call

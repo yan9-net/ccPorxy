@@ -2,14 +2,14 @@ package storage
 
 import "reflect"
 
-// StatsStorageAdapter adapts SQLiteStorage to be used by proxy.Stats
+// StatsStorageAdapter adapts PostgreSQLStorage to be used by proxy.Stats
 // It implements the proxy.StatsStorage interface
 type StatsStorageAdapter struct {
-	storage *SQLiteStorage
+	storage *PostgreSQLStorage
 }
 
 // NewStatsStorageAdapter creates a new adapter
-func NewStatsStorageAdapter(storage *SQLiteStorage) *StatsStorageAdapter {
+func NewStatsStorageAdapter(storage *PostgreSQLStorage) *StatsStorageAdapter {
 	return &StatsStorageAdapter{storage: storage}
 }
 

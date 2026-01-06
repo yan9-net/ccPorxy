@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/lich0821/ccNexus/internal/config"
-	"github.com/lich0821/ccNexus/internal/logger"
-	"github.com/lich0821/ccNexus/internal/tokencount"
+	"github.com/carbe/ccNexus/internal/config"
+	"github.com/carbe/ccNexus/internal/logger"
+	"github.com/carbe/ccNexus/internal/tokencount"
 )
 
 // handleHealth handles health check requests

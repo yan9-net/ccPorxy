@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lich0821/ccNexus/internal/config"
-	"github.com/lich0821/ccNexus/internal/logger"
+	"github.com/carbe/ccNexus/internal/config"
+	"github.com/carbe/ccNexus/internal/logger"
 )
 
 // SSEEvent represents a Server-Sent Event
@@ -33,17 +33,17 @@ type APIResponse struct {
 
 // Proxy represents the proxy server
 type Proxy struct {
-	config           *config.Config
-	stats            *Stats
-	currentIndex     int
-	mu               sync.RWMutex
-	server           *http.Server
-	activeRequests   map[string]bool              // tracks active requests by endpoint name
-	activeRequestsMu sync.RWMutex                 // protects activeRequests map
-	endpointCtx      map[string]context.Context   // context per endpoint for cancellation
-	endpointCancel   map[string]context.CancelFunc // cancel functions per endpoint
-	ctxMu            sync.RWMutex                 // protects context maps
-	onEndpointSuccess func(endpointName string)   // callback when endpoint request succeeds
+	config            *config.Config
+	stats             *Stats
+	currentIndex      int
+	mu                sync.RWMutex
+	server            *http.Server
+	activeRequests    map[string]bool               // tracks active requests by endpoint name
+	activeRequestsMu  sync.RWMutex                  // protects activeRequests map
+	endpointCtx       map[string]context.Context    // context per endpoint for cancellation
+	endpointCancel    map[string]context.CancelFunc // cancel functions per endpoint
+	ctxMu             sync.RWMutex                  // protects context maps
+	onEndpointSuccess func(endpointName string)     // callback when endpoint request succeeds
 }
 
 // New creates a new Proxy instance

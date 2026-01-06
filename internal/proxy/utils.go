@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/lich0821/ccNexus/internal/logger"
-	"github.com/lich0821/ccNexus/internal/tokencount"
+	"github.com/carbe/ccNexus/internal/logger"
+	"github.com/carbe/ccNexus/internal/tokencount"
 )
 
 // normalizeAPIUrl ensures the API URL has a protocol prefix

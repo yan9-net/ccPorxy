@@ -16,23 +16,6 @@ func LaunchTerminal(terminalID, dir string) error {
 
 // LaunchTerminalWithSession launches a terminal with optional session resume
 func LaunchTerminalWithSession(terminalID, dir, sessionID string) error {
-	cliCmd := getClaudeCommand(sessionID)
-	return launchTerminalWithCli(terminalID, dir, cliCmd)
-}
-
-// LaunchCodexTerminal launches a terminal with Codex
-func LaunchCodexTerminal(terminalID, dir string) error {
-	return LaunchCodexTerminalWithSession(terminalID, dir, "")
-}
-
-// LaunchCodexTerminalWithSession launches a terminal with Codex and optional session
-func LaunchCodexTerminalWithSession(terminalID, dir, sessionID string) error {
-	cliCmd := getCodexCommand(sessionID)
-	return launchTerminalWithCli(terminalID, dir, cliCmd)
-}
-
-// launchTerminalWithCli is the common implementation for launching terminals
-func launchTerminalWithCli(terminalID, dir, cliCmd string) error {
 	// Validate directory exists
 	if dir != "" {
 		if info, err := os.Stat(dir); err != nil {
@@ -55,7 +38,7 @@ func launchTerminalWithCli(terminalID, dir, cliCmd string) error {
 		return fmt.Errorf("terminal not found: %s", terminalID)
 	}
 
-	cmd := buildLaunchCommandWithCli(*termInfo, dir, cliCmd)
+	cmd := buildLaunchCommand(*termInfo, dir, sessionID)
 	if cmd == nil {
 		return fmt.Errorf("unsupported terminal: %s", terminalID)
 	}
@@ -96,18 +79,6 @@ func getClaudeCommand(sessionID string) string {
 	}
 	if runtime.GOOS == "darwin" {
 		// Trigger npm lazy-loading for nvm/fnm environments
-		return "npm --version >/dev/null 2>&1; " + cmd
-	}
-	return cmd
-}
-
-// getCodexCommand returns the codex command with optional session resume
-func getCodexCommand(sessionID string) string {
-	cmd := "codex"
-	if sessionID != "" {
-		cmd = fmt.Sprintf("codex resume %s", shellEscape(sessionID))
-	}
-	if runtime.GOOS == "darwin" {
 		return "npm --version >/dev/null 2>&1; " + cmd
 	}
 	return cmd
@@ -240,34 +211,31 @@ func buildThirdPartyTerminalCommand(shell, dir, claudeCmd string) string {
 
 func buildLaunchCommand(termInfo TerminalInfo, dir, sessionID string) *exec.Cmd {
 	claudeCmd := getClaudeCommand(sessionID)
-	return buildLaunchCommandWithCli(termInfo, dir, claudeCmd)
-}
 
-func buildLaunchCommandWithCli(termInfo TerminalInfo, dir, cliCmd string) *exec.Cmd {
 	switch termInfo.ID {
 	// Windows terminals
 	case "cmd":
-		return buildWindowsCmdCommand(dir, cliCmd)
+		return buildWindowsCmdCommand(dir, claudeCmd)
 	case "powershell":
-		return buildWindowsPowerShellCommand(dir, cliCmd)
+		return buildWindowsPowerShellCommand(dir, claudeCmd)
 	case "wt":
-		return buildWindowsTerminalCommand(dir, cliCmd)
+		return buildWindowsTerminalCommand(dir, claudeCmd)
 	case "gitbash":
-		return buildGitBashCommand(termInfo, dir, cliCmd)
+		return buildGitBashCommand(termInfo, dir, claudeCmd)
 
 	// Mac terminals
 	case "terminal":
-		return buildMacTerminalCommand(dir, cliCmd)
+		return buildMacTerminalCommand(dir, claudeCmd)
 	case "iterm2":
-		return buildITerm2Command(dir, cliCmd)
+		return buildITerm2Command(dir, claudeCmd)
 	case "ghostty":
-		return buildGhosttyCommand(termInfo, dir, cliCmd)
+		return buildGhosttyCommand(termInfo, dir, claudeCmd)
 	case "alacritty":
-		return buildAlacrittyCommand(termInfo, dir, cliCmd)
+		return buildAlacrittyCommand(termInfo, dir, claudeCmd)
 	case "kitty":
-		return buildKittyCommand(termInfo, dir, cliCmd)
+		return buildKittyCommand(termInfo, dir, claudeCmd)
 	case "wezterm":
-		return buildWezTermCommand(termInfo, dir, cliCmd)
+		return buildWezTermCommand(termInfo, dir, claudeCmd)
 
 	default:
 		return nil

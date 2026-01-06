@@ -18,39 +18,6 @@ type Endpoint struct {
 	Remark      string `json:"remark,omitempty"`      // Optional remark for the endpoint
 }
 
-// WebDAVConfig represents WebDAV synchronization configuration
-type WebDAVConfig struct {
-	URL        string `json:"url"`        // WebDAV server URL
-	Username   string `json:"username"`   // Username
-	Password   string `json:"password"`   // Password
-	ConfigPath string `json:"configPath"` // Config backup path (default /ccNexus/config)
-	StatsPath  string `json:"statsPath"`  // Stats backup path (default /ccNexus/stats)
-}
-
-// LocalBackupConfig represents local backup configuration
-type LocalBackupConfig struct {
-	Dir string `json:"dir"` // Local directory to store backups
-}
-
-// S3BackupConfig represents S3-compatible backup configuration
-type S3BackupConfig struct {
-	Endpoint       string `json:"endpoint"`
-	Region         string `json:"region,omitempty"`
-	Bucket         string `json:"bucket"`
-	Prefix         string `json:"prefix,omitempty"`
-	AccessKey      string `json:"accessKey"`
-	SecretKey      string `json:"secretKey"`
-	SessionToken   string `json:"sessionToken,omitempty"`
-	UseSSL         bool   `json:"useSSL"`
-	ForcePathStyle bool   `json:"forcePathStyle"`
-}
-
-// BackupConfig represents backup/sync configuration across providers
-type BackupConfig struct {
-	Provider string             `json:"provider"` // webdav | local | s3
-	Local    *LocalBackupConfig `json:"local,omitempty"`
-	S3       *S3BackupConfig    `json:"s3,omitempty"`
-}
 
 // UpdateConfig represents update configuration
 type UpdateConfig struct {
@@ -83,11 +50,7 @@ type Config struct {
 	AutoDarkTheme       string          `json:"autoDarkTheme,omitempty"`       // Theme to use in nighttime when auto mode is on
 	WindowWidth         int             `json:"windowWidth"`                   // Window width in pixels
 	WindowHeight        int             `json:"windowHeight"`                  // Window height in pixels
-	CloseWindowBehavior       string          `json:"closeWindowBehavior,omitempty"` // "quit", "minimize", "ask"
-	ClaudeNotificationEnabled bool            `json:"claudeNotificationEnabled"`     // Enable Claude Code task completion notification
-	ClaudeNotificationType    string          `json:"claudeNotificationType"`        // Notification type: toast, dialog, disabled
-	WebDAV                    *WebDAVConfig   `json:"webdav,omitempty"`              // WebDAV synchronization config
-	Backup              *BackupConfig   `json:"backup,omitempty"`              // Backup/sync configuration
+	CloseWindowBehavior string          `json:"closeWindowBehavior,omitempty"` // "quit", "minimize", "ask"
 	Update              *UpdateConfig   `json:"update,omitempty"`              // Update configuration
 	Terminal            *TerminalConfig `json:"terminal,omitempty"`            // Terminal launcher config
 	Proxy               *ProxyConfig    `json:"proxy,omitempty"`               // HTTP proxy config
@@ -301,34 +264,6 @@ func (c *Config) UpdateAutoDarkTheme(theme string) {
 	c.AutoDarkTheme = theme
 }
 
-// GetWebDAV returns the WebDAV configuration (thread-safe)
-func (c *Config) GetWebDAV() *WebDAVConfig {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return c.WebDAV
-}
-
-// UpdateWebDAV updates the WebDAV configuration (thread-safe)
-func (c *Config) UpdateWebDAV(webdav *WebDAVConfig) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.WebDAV = webdav
-}
-
-// GetBackup returns the backup configuration (thread-safe)
-func (c *Config) GetBackup() *BackupConfig {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return c.Backup
-}
-
-// UpdateBackup updates the backup configuration (thread-safe)
-func (c *Config) UpdateBackup(backup *BackupConfig) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.Backup = backup
-}
-
 // GetUpdate returns the Update configuration (thread-safe)
 func (c *Config) GetUpdate() *UpdateConfig {
 	c.mu.RLock()
@@ -381,21 +316,6 @@ func (c *Config) UpdateProxy(proxy *ProxyConfig) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.Proxy = proxy
-}
-
-// GetClaudeNotification returns the Claude notification settings (thread-safe)
-func (c *Config) GetClaudeNotification() (enabled bool, notifType string) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return c.ClaudeNotificationEnabled, c.ClaudeNotificationType
-}
-
-// UpdateClaudeNotification updates the Claude notification settings (thread-safe)
-func (c *Config) UpdateClaudeNotification(enabled bool, notifType string) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.ClaudeNotificationEnabled = enabled
-	c.ClaudeNotificationType = notifType
 }
 
 // StorageAdapter defines the interface needed for loading/saving config
@@ -527,55 +447,6 @@ func LoadFromStorage(storage StorageAdapter) (*Config, error) {
 		config.AutoDarkTheme = "dark"
 	}
 
-	// Load WebDAV config if exists
-	if url, err := storage.GetConfig("webdav_url"); err == nil && url != "" {
-		username, _ := storage.GetConfig("webdav_username")
-		password, _ := storage.GetConfig("webdav_password")
-		configPath, _ := storage.GetConfig("webdav_configPath")
-		statsPath, _ := storage.GetConfig("webdav_statsPath")
-
-		config.WebDAV = &WebDAVConfig{
-			URL:        url,
-			Username:   username,
-			Password:   password,
-			ConfigPath: configPath,
-			StatsPath:  statsPath,
-		}
-	}
-
-	// Load Backup config
-	provider, _ := storage.GetConfig("backup_provider")
-	if provider != "" {
-		config.Backup = &BackupConfig{Provider: provider}
-	}
-	if provider == "local" {
-		backupDir, _ := storage.GetConfig("backup_local_dir")
-		config.Backup.Local = &LocalBackupConfig{Dir: backupDir}
-	}
-	if provider == "s3" {
-		s3Endpoint, _ := storage.GetConfig("backup_s3_endpoint")
-		s3Region, _ := storage.GetConfig("backup_s3_region")
-		s3Bucket, _ := storage.GetConfig("backup_s3_bucket")
-		s3Prefix, _ := storage.GetConfig("backup_s3_prefix")
-		s3AccessKey, _ := storage.GetConfig("backup_s3_accessKey")
-		s3SecretKey, _ := storage.GetConfig("backup_s3_secretKey")
-		s3SessionToken, _ := storage.GetConfig("backup_s3_sessionToken")
-		s3UseSSLStr, _ := storage.GetConfig("backup_s3_useSSL")
-		s3ForcePathStyleStr, _ := storage.GetConfig("backup_s3_forcePathStyle")
-
-		config.Backup.S3 = &S3BackupConfig{
-			Endpoint:       s3Endpoint,
-			Region:         s3Region,
-			Bucket:         s3Bucket,
-			Prefix:         s3Prefix,
-			AccessKey:      s3AccessKey,
-			SecretKey:      s3SecretKey,
-			SessionToken:   s3SessionToken,
-			UseSSL:         s3UseSSLStr == "true",
-			ForcePathStyle: s3ForcePathStyleStr == "true",
-		}
-	}
-
 	// Load Update config
 	config.Update = &UpdateConfig{
 		AutoCheck:     true,
@@ -614,18 +485,6 @@ func LoadFromStorage(storage StorageAdapter) (*Config, error) {
 	// Load Proxy config
 	if proxyURL, err := storage.GetConfig("proxy_url"); err == nil && proxyURL != "" {
 		config.Proxy = &ProxyConfig{URL: proxyURL}
-	}
-
-	// Load Claude notification config
-	if enabledStr, err := storage.GetConfig("claude_notification_enabled"); err == nil && enabledStr != "" {
-		config.ClaudeNotificationEnabled = enabledStr == "true"
-	}
-	if notifType, err := storage.GetConfig("claude_notification_type"); err == nil && notifType != "" {
-		config.ClaudeNotificationType = notifType
-	}
-	// Default to "toast" if not set
-	if config.ClaudeNotificationType == "" {
-		config.ClaudeNotificationType = "toast"
 	}
 
 	return config, nil
@@ -691,34 +550,6 @@ func (c *Config) SaveToStorage(storage StorageAdapter) error {
 	storage.SetConfig("windowHeight", strconv.Itoa(c.WindowHeight))
 	storage.SetConfig("closeWindowBehavior", c.CloseWindowBehavior)
 
-	// Save WebDAV config
-	if c.WebDAV != nil {
-		storage.SetConfig("webdav_url", c.WebDAV.URL)
-		storage.SetConfig("webdav_username", c.WebDAV.Username)
-		storage.SetConfig("webdav_password", c.WebDAV.Password)
-		storage.SetConfig("webdav_configPath", c.WebDAV.ConfigPath)
-		storage.SetConfig("webdav_statsPath", c.WebDAV.StatsPath)
-	}
-
-	// Save Backup config
-	if c.Backup != nil {
-		storage.SetConfig("backup_provider", c.Backup.Provider)
-		if c.Backup.Local != nil {
-			storage.SetConfig("backup_local_dir", c.Backup.Local.Dir)
-		}
-		if c.Backup.S3 != nil {
-			storage.SetConfig("backup_s3_endpoint", c.Backup.S3.Endpoint)
-			storage.SetConfig("backup_s3_region", c.Backup.S3.Region)
-			storage.SetConfig("backup_s3_bucket", c.Backup.S3.Bucket)
-			storage.SetConfig("backup_s3_prefix", c.Backup.S3.Prefix)
-			storage.SetConfig("backup_s3_accessKey", c.Backup.S3.AccessKey)
-			storage.SetConfig("backup_s3_secretKey", c.Backup.S3.SecretKey)
-			storage.SetConfig("backup_s3_sessionToken", c.Backup.S3.SessionToken)
-			storage.SetConfig("backup_s3_useSSL", strconv.FormatBool(c.Backup.S3.UseSSL))
-			storage.SetConfig("backup_s3_forcePathStyle", strconv.FormatBool(c.Backup.S3.ForcePathStyle))
-		}
-	}
-
 	// Save Update config
 	if c.Update != nil {
 		storage.SetConfig("update_autoCheck", strconv.FormatBool(c.Update.AutoCheck))
@@ -741,10 +572,6 @@ func (c *Config) SaveToStorage(storage StorageAdapter) error {
 	} else {
 		storage.SetConfig("proxy_url", "")
 	}
-
-	// Save Claude notification config
-	storage.SetConfig("claude_notification_enabled", strconv.FormatBool(c.ClaudeNotificationEnabled))
-	storage.SetConfig("claude_notification_type", c.ClaudeNotificationType)
 
 	return nil
 }

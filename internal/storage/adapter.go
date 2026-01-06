@@ -1,14 +1,14 @@
 package storage
 
-import "github.com/lich0821/ccNexus/internal/config"
+import "github.com/carbe/ccNexus/internal/config"
 
-// ConfigStorageAdapter adapts SQLiteStorage to config.StorageAdapter interface
+// ConfigStorageAdapter adapts PostgreSQLStorage to config.StorageAdapter interface
 type ConfigStorageAdapter struct {
-	storage *SQLiteStorage
+	storage *PostgreSQLStorage
 }
 
 // NewConfigStorageAdapter creates a new adapter
-func NewConfigStorageAdapter(storage *SQLiteStorage) *ConfigStorageAdapter {
+func NewConfigStorageAdapter(storage *PostgreSQLStorage) *ConfigStorageAdapter {
 	return &ConfigStorageAdapter{storage: storage}
 }
 

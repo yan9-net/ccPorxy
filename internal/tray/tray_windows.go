@@ -31,7 +31,7 @@ var menuTexts = map[string]struct {
 		ShowTip: "显示主窗口",
 		Quit:    "退出程序",
 		QuitTip: "退出 ccNexus",
-		Tooltip: "ccNexus - API 端点轮换代理",
+		Tooltip: "ccNexus - API 节点轮换代理",
 	},
 	"en": {
 		Show:    "Show Window",

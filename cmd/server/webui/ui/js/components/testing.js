@@ -1,127 +1,102 @@
-import { api } from '../api.js';
-import { notifications } from '../utils/notifications.js';
+// Testing Component
+const TestingComponent = {
+    template: `
+        <div class="testing">
+            <div class="page-header">
+                <h1 class="page-title">
+                    <el-icon><Cpu /></el-icon>
+                    测试工具
+                </h1>
+            </div>
 
-class Testing {
-    constructor() {
-        this.container = document.getElementById('view-container');
-        this.endpoints = [];
-    }
+            <div class="content-card">
+                <div class="card-body">
+                    <el-form label-width="100px">
+                        <el-form-item label="选择节点">
+                            <el-select v-model="selectedEndpoint" placeholder="请选择节点" style="width: 300px;" v-loading="loadingEndpoints">
+                                <el-option v-for="ep in enabledEndpoints" :key="ep.name" :label="ep.name" :value="ep.name" />
+                            </el-select>
+                        </el-form-item>
+                        <el-form-item>
+                            <el-button type="primary" @click="runTest" :loading="testing" :disabled="!selectedEndpoint">
+                                <el-icon><VideoPlay /></el-icon>
+                                运行测试
+                            </el-button>
+                        </el-form-item>
+                    </el-form>
 
-    async render() {
-        this.container.innerHTML = `
-            <div class="testing">
-                <h1>Endpoint Testing</h1>
-
-                <div class="card mt-3">
-                    <div class="card-body">
-                        <div class="form-group">
-                            <label class="form-label">Select Endpoint</label>
-                            <select class="form-select" id="test-endpoint-select">
-                                <option value="">Loading...</option>
-                            </select>
+                    <div v-if="testResult" :class="['test-result', testResult.success ? 'success' : 'error']">
+                        <el-descriptions :column="1" border>
+                            <el-descriptions-item label="状态">
+                                <el-tag :type="testResult.success ? 'success' : 'danger'">
+                                    {{ testResult.success ? '成功' : '失败' }}
+                                </el-tag>
+                            </el-descriptions-item>
+                            <el-descriptions-item v-if="testResult.latency" label="延迟">
+                                {{ testResult.latency }}ms
+                            </el-descriptions-item>
+                        </el-descriptions>
+                        <div v-if="testResult.response" style="margin-top: 16px;">
+                            <div style="margin-bottom: 8px; font-weight: 500;">响应内容:</div>
+                            <div class="test-response">{{ testResult.response }}</div>
                         </div>
-
-                        <div class="form-group">
-                            <button class="btn btn-primary" id="test-btn">Run Test</button>
+                        <div v-if="testResult.error" style="margin-top: 16px;">
+                            <div style="margin-bottom: 8px; font-weight: 500; color: var(--el-color-danger);">错误信息:</div>
+                            <div class="test-response">{{ testResult.error }}</div>
                         </div>
-
-                        <div id="test-result" class="mt-3" style="display: none;"></div>
                     </div>
                 </div>
             </div>
-        `;
+        </div>
+    `,
+    setup() {
+        const { ref, computed, onMounted } = Vue;
 
-        document.getElementById('test-btn').addEventListener('click', () => this.runTest());
+        const loadingEndpoints = ref(true);
+        const endpoints = ref([]);
+        const selectedEndpoint = ref('');
+        const testing = ref(false);
+        const testResult = ref(null);
 
-        await this.loadEndpoints();
-    }
+        const enabledEndpoints = computed(() => endpoints.value.filter(ep => ep.enabled));
 
-    async loadEndpoints() {
-        try {
-            const data = await api.getEndpoints();
-            this.endpoints = data.endpoints || [];
+        const loadEndpoints = async () => {
+            loadingEndpoints.value = true;
+            try {
+                const data = await api.getEndpoints();
+                endpoints.value = data.endpoints || [];
+            } catch (error) {
+                ElementPlus.ElMessage.error('加载节点失败: ' + error.message);
+            } finally {
+                loadingEndpoints.value = false;
+            }
+        };
 
-            const select = document.getElementById('test-endpoint-select');
-            const enabledEndpoints = this.endpoints.filter(ep => ep.enabled);
-
-            if (enabledEndpoints.length === 0) {
-                select.innerHTML = '<option value="">No enabled endpoints</option>';
+        const runTest = async () => {
+            if (!selectedEndpoint.value) {
+                ElementPlus.ElMessage.warning('请先选择节点');
                 return;
             }
-
-            select.innerHTML = enabledEndpoints.map(ep =>
-                `<option value="${this.escapeHtml(ep.name)}">${this.escapeHtml(ep.name)}</option>`
-            ).join('');
-        } catch (error) {
-            notifications.error('Failed to load endpoints: ' + error.message);
-        }
-    }
-
-    async runTest() {
-        const select = document.getElementById('test-endpoint-select');
-        const endpointName = select.value;
-
-        if (!endpointName) {
-            notifications.warning('Please select an endpoint');
-            return;
-        }
-
-        const resultDiv = document.getElementById('test-result');
-        resultDiv.style.display = 'block';
-        resultDiv.innerHTML = '<div class="flex-center"><div class="spinner"></div></div>';
-
-        try {
-            const result = await api.testEndpoint(endpointName);
-
-            if (result.success) {
-                resultDiv.innerHTML = `
-                    <div class="card" style="background-color: var(--bg-secondary);">
-                        <div class="mb-2">
-                            <span class="badge badge-success">Success</span>
-                            <span class="text-muted ml-2">Latency: ${result.latency}ms</span>
-                        </div>
-                        <div>
-                            <strong>Response:</strong>
-                            <div class="code-block mt-1">${this.escapeHtml(result.response || 'No response')}</div>
-                        </div>
-                    </div>
-                `;
-                notifications.success('Test completed successfully');
-            } else {
-                resultDiv.innerHTML = `
-                    <div class="card" style="background-color: var(--bg-secondary);">
-                        <div class="mb-2">
-                            <span class="badge badge-danger">Failed</span>
-                        </div>
-                        <div>
-                            <strong>Error:</strong>
-                            <div class="code-block mt-1">${this.escapeHtml(result.error || 'Unknown error')}</div>
-                        </div>
-                    </div>
-                `;
-                notifications.error('Test failed');
+            testing.value = true;
+            testResult.value = null;
+            try {
+                const result = await api.testEndpoint(selectedEndpoint.value);
+                testResult.value = result;
+                if (result.success) {
+                    ElementPlus.ElMessage.success('测试成功');
+                } else {
+                    ElementPlus.ElMessage.error('测试失败');
+                }
+            } catch (error) {
+                testResult.value = { success: false, error: error.message };
+                ElementPlus.ElMessage.error('测试失败: ' + error.message);
+            } finally {
+                testing.value = false;
             }
-        } catch (error) {
-            resultDiv.innerHTML = `
-                <div class="card" style="background-color: var(--bg-secondary);">
-                    <div class="mb-2">
-                        <span class="badge badge-danger">Error</span>
-                    </div>
-                    <div>
-                        <strong>Error:</strong>
-                        <div class="code-block mt-1">${this.escapeHtml(error.message)}</div>
-                    </div>
-                </div>
-            `;
-            notifications.error('Test failed: ' + error.message);
-        }
-    }
+        };
 
-    escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
-}
+        onMounted(() => loadEndpoints());
 
-export const testing = new Testing();
+        return { loadingEndpoints, endpoints, selectedEndpoint, enabledEndpoints, testing, testResult, runTest };
+    }
+};

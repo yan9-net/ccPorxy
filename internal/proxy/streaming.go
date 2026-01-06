@@ -9,12 +9,12 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/lich0821/ccNexus/internal/config"
-	"github.com/lich0821/ccNexus/internal/logger"
-	"github.com/lich0821/ccNexus/internal/transformer"
-	"github.com/lich0821/ccNexus/internal/transformer/cc"
-	"github.com/lich0821/ccNexus/internal/transformer/cx/chat"
-	"github.com/lich0821/ccNexus/internal/transformer/cx/responses"
+	"github.com/carbe/ccNexus/internal/config"
+	"github.com/carbe/ccNexus/internal/logger"
+	"github.com/carbe/ccNexus/internal/transformer"
+	"github.com/carbe/ccNexus/internal/transformer/cc"
+	"github.com/carbe/ccNexus/internal/transformer/cx/chat"
+	"github.com/carbe/ccNexus/internal/transformer/cx/responses"
 )
 
 // handleStreamingResponse processes streaming SSE responses

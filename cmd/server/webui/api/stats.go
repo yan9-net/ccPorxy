@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/lich0821/ccNexus/internal/logger"
+	"github.com/carbe/ccNexus/internal/logger"
 )
 
 // handleStatsSummary returns overall statistics

@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lich0821/ccNexus/internal/config"
-	"github.com/lich0821/ccNexus/internal/logger"
-	"github.com/lich0821/ccNexus/internal/storage"
+	"github.com/carbe/ccNexus/internal/config"
+	"github.com/carbe/ccNexus/internal/logger"
+	"github.com/carbe/ccNexus/internal/storage"
 )
 
 // handleEndpoints handles GET (list) and POST (create) for endpoints
@@ -69,9 +69,9 @@ func (h *Handler) listEndpoints(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Mask API keys
-	for i := range endpoints {
-		endpoints[i].APIKey = maskAPIKey(endpoints[i].APIKey)
-	}
+	//for i := range endpoints {
+	//	endpoints[i].APIKey = maskAPIKey(endpoints[i].APIKey)
+	//}
 
 	WriteSuccess(w, map[string]interface{}{
 		"endpoints": endpoints,

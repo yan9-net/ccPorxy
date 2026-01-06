@@ -3,24 +3,27 @@ package api
 import (
 	"net/http"
 
-	"github.com/lich0821/ccNexus/internal/config"
-	"github.com/lich0821/ccNexus/internal/proxy"
-	"github.com/lich0821/ccNexus/internal/storage"
+	"github.com/carbe/ccNexus/internal/config"
+	"github.com/carbe/ccNexus/internal/proxy"
+	"github.com/carbe/ccNexus/internal/service"
+	"github.com/carbe/ccNexus/internal/storage"
 )
 
 // Handler handles API requests
 type Handler struct {
 	config  *config.Config
 	proxy   *proxy.Proxy
-	storage *storage.SQLiteStorage
+	storage *storage.PostgreSQLStorage
+	service *service.EndpointService
 }
 
 // NewHandler creates a new API handler
-func NewHandler(cfg *config.Config, p *proxy.Proxy, s *storage.SQLiteStorage) *Handler {
+func NewHandler(cfg *config.Config, p *proxy.Proxy, s *storage.PostgreSQLStorage) *Handler {
 	return &Handler{
 		config:  cfg,
 		proxy:   p,
 		storage: s,
+		service: service.NewEndpointService(cfg, p, s),
 	}
 }
 

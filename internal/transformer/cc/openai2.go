@@ -1,8 +1,8 @@
 package cc
 
 import (
-	"github.com/lich0821/ccNexus/internal/transformer"
-	"github.com/lich0821/ccNexus/internal/transformer/convert"
+	"github.com/carbe/ccNexus/internal/transformer"
+	"github.com/carbe/ccNexus/internal/transformer/convert"
 )
 
 // OpenAI2Transformer transforms Claude Code requests to OpenAI Responses API format
