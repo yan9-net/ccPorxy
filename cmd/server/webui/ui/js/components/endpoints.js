@@ -52,7 +52,7 @@ const EndpointsComponent = {
                         <el-table-column label="操作" width="360" fixed="right">
                             <template #default="{ row }">
                                 <el-button-group size="small">
-                                    <el-button v-if="row.enabled && row.name !== currentEndpoint" @click="switchEndpoint(row.name)">切换</el-button>
+                                    <el-button :disabled="!(row.enabled && row.name !== currentEndpoint)" @click="switchEndpoint(row.name)">切换</el-button>
                                     <el-button @click="testEndpoint(row.name)" :loading="testingEndpoint === row.name">测试</el-button>
                                     <el-button :type="row.enabled ? 'warning' : 'success'" @click="toggleEndpoint(row)">{{ row.enabled ? '禁用' : '启用' }}</el-button>
                                     <el-button @click="showEditDialog(row)">编辑</el-button>

@@ -8,6 +8,7 @@ import (
 
 	"github.com/carbe/ccNexus/internal/config"
 	"github.com/carbe/ccNexus/internal/logger"
+	"github.com/carbe/ccNexus/internal/service"
 	"github.com/carbe/ccNexus/internal/storage"
 )
 
@@ -218,9 +219,10 @@ func (h *Handler) updateEndpoint(w http.ResponseWriter, r *http.Request, name st
 	if req.Transformer != "" {
 		existing.Transformer = req.Transformer
 	}
-	if req.Model != "" {
-		existing.Model = req.Model
-	}
+	existing.Model = req.Model
+	//if req.Model != "" {
+	//	existing.Model = req.Model
+	//}
 	existing.Remark = req.Remark
 	existing.UpdatedAt = time.Now()
 
@@ -442,6 +444,8 @@ func (h *Handler) reloadConfig() error {
 	}
 
 	h.config = cfg
+	// 同步更新 service 中的 config 引用
+	h.service = service.NewEndpointService(cfg, h.proxy, h.storage)
 	return h.proxy.UpdateConfig(cfg)
 }
 
