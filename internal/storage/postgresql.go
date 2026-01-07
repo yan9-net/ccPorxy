@@ -66,6 +66,7 @@ func (s *PostgreSQLStorage) initSchema() error {
 		model TEXT,
 		remark TEXT,
 		sort_order INTEGER DEFAULT 0,
+		priority INTEGER DEFAULT 100,
 		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 	);
@@ -103,6 +104,11 @@ func (s *PostgreSQLStorage) initSchema() error {
 		return err
 	}
 
+	// Migration: Add priority column if it doesn't exist
+	if err := s.migratePriority(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -136,11 +142,36 @@ func (s *PostgreSQLStorage) migrateSortOrder() error {
 	return nil
 }
 
+// migratePriority adds the priority column to existing databases
+func (s *PostgreSQLStorage) migratePriority() error {
+	// Check if priority column exists
+	var exists bool
+	err := s.db.QueryRow(`
+		SELECT EXISTS (
+			SELECT 1 FROM information_schema.columns
+			WHERE table_name = 'endpoints' AND column_name = 'priority'
+		)
+	`).Scan(&exists)
+	if err != nil {
+		return err
+	}
+
+	// If column doesn't exist, add it with default value 100
+	if !exists {
+		// Add the column
+		if _, err := s.db.Exec(`ALTER TABLE endpoints ADD COLUMN priority INTEGER DEFAULT 100`); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func (s *PostgreSQLStorage) GetEndpoints() ([]Endpoint, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	rows, err := s.db.Query(`SELECT id, name, api_url, api_key, enabled, transformer, model, remark, sort_order, created_at, updated_at FROM endpoints ORDER BY sort_order ASC`)
+	rows, err := s.db.Query(`SELECT id, name, api_url, api_key, enabled, transformer, model, remark, sort_order, priority, created_at, updated_at FROM endpoints ORDER BY priority ASC, sort_order ASC`)
 	if err != nil {
 		return nil, err
 	}
@@ -149,7 +180,7 @@ func (s *PostgreSQLStorage) GetEndpoints() ([]Endpoint, error) {
 	var endpoints []Endpoint
 	for rows.Next() {
 		var ep Endpoint
-		if err := rows.Scan(&ep.ID, &ep.Name, &ep.APIUrl, &ep.APIKey, &ep.Enabled, &ep.Transformer, &ep.Model, &ep.Remark, &ep.SortOrder, &ep.CreatedAt, &ep.UpdatedAt); err != nil {
+		if err := rows.Scan(&ep.ID, &ep.Name, &ep.APIUrl, &ep.APIKey, &ep.Enabled, &ep.Transformer, &ep.Model, &ep.Remark, &ep.SortOrder, &ep.Priority, &ep.CreatedAt, &ep.UpdatedAt); err != nil {
 			return nil, err
 		}
 		endpoints = append(endpoints, ep)
@@ -162,8 +193,8 @@ func (s *PostgreSQLStorage) SaveEndpoint(ep *Endpoint) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	err := s.db.QueryRow(`INSERT INTO endpoints (name, api_url, api_key, enabled, transformer, model, remark, sort_order) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
-		ep.Name, ep.APIUrl, ep.APIKey, ep.Enabled, ep.Transformer, ep.Model, ep.Remark, ep.SortOrder).Scan(&ep.ID)
+	err := s.db.QueryRow(`INSERT INTO endpoints (name, api_url, api_key, enabled, transformer, model, remark, sort_order, priority) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
+		ep.Name, ep.APIUrl, ep.APIKey, ep.Enabled, ep.Transformer, ep.Model, ep.Remark, ep.SortOrder, ep.Priority).Scan(&ep.ID)
 	return err
 }
 
@@ -171,8 +202,8 @@ func (s *PostgreSQLStorage) UpdateEndpoint(ep *Endpoint) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	_, err := s.db.Exec(`UPDATE endpoints SET api_url=$1, api_key=$2, enabled=$3, transformer=$4, model=$5, remark=$6, sort_order=$7, updated_at=CURRENT_TIMESTAMP WHERE name=$8`,
-		ep.APIUrl, ep.APIKey, ep.Enabled, ep.Transformer, ep.Model, ep.Remark, ep.SortOrder, ep.Name)
+	_, err := s.db.Exec(`UPDATE endpoints SET api_url=$1, api_key=$2, enabled=$3, transformer=$4, model=$5, remark=$6, sort_order=$7, priority=$8, updated_at=CURRENT_TIMESTAMP WHERE name=$9`,
+		ep.APIUrl, ep.APIKey, ep.Enabled, ep.Transformer, ep.Model, ep.Remark, ep.SortOrder, ep.Priority, ep.Name)
 	return err
 }
 

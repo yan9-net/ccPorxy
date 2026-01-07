@@ -45,6 +45,9 @@ func (h *Handler) handleEndpointByName(w http.ResponseWriter, r *http.Request) {
 		case "toggle":
 			h.toggleEndpoint(w, r, name)
 			return
+		case "unblacklist":
+			h.removeFromBlacklist(w, r, name)
+			return
 		}
 	}
 
@@ -177,6 +180,7 @@ func (h *Handler) updateEndpoint(w http.ResponseWriter, r *http.Request, name st
 		Transformer string `json:"transformer"`
 		Model       string `json:"model"`
 		Remark      string `json:"remark"`
+		Priority    int    `json:"priority"` // 优先级，数字越小优先级越高
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -225,6 +229,7 @@ func (h *Handler) updateEndpoint(w http.ResponseWriter, r *http.Request, name st
 	//}
 	existing.Remark = req.Remark
 	existing.UpdatedAt = time.Now()
+	existing.Priority = req.Priority
 
 	if err := h.storage.UpdateEndpoint(existing); err != nil {
 		logger.Error("Failed to update endpoint: %v", err)
@@ -460,4 +465,33 @@ func maskAPIKey(key string) string {
 // normalizeAPIUrl ensures the API URL has the correct format
 func normalizeAPIUrl(apiUrl string) string {
 	return strings.TrimSuffix(apiUrl, "/")
+}
+
+// removeFromBlacklist removes an endpoint from the blacklist
+func (h *Handler) removeFromBlacklist(w http.ResponseWriter, r *http.Request, name string) {
+	if r.Method != http.MethodPost && r.Method != http.MethodDelete {
+		WriteError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
+	h.proxy.RemoveFromBlacklist(name)
+	logger.Info("Endpoint %s removed from blacklist via API", name)
+
+	WriteSuccess(w, map[string]interface{}{
+		"message": "Endpoint removed from blacklist",
+		"name":    name,
+	})
+}
+
+// handleBlacklistStatus returns the current blacklist status
+func (h *Handler) handleBlacklistStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		WriteError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
+	status := h.proxy.GetBlacklistStatus()
+	WriteSuccess(w, map[string]interface{}{
+		"blacklist": status,
+	})
 }

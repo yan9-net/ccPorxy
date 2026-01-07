@@ -4,12 +4,13 @@ const EndpointsComponent = {
         <div class="endpoints">
             <div class="page-header">
                 <h1 class="page-title">
-                    <el-icon><Link /></el-icon>
-                    节点管理
+                    <el-icon><Link /></el-icon> 节点管理
                 </h1>
+                <el-button type="primary" @click="loadEndpoints">
+                    <el-icon><Refresh /></el-icon> 刷新列表
+                </el-button>
                 <el-button type="primary" @click="showAddDialog">
-                    <el-icon><Plus /></el-icon>
-                    添加节点
+                    <el-icon><Plus /></el-icon> 添加节点
                 </el-button>
             </div>
 
@@ -44,9 +45,22 @@ const EndpointsComponent = {
                         <el-table-column prop="model" label="模型" width="150">
                             <template #default="{ row }">{{ row.model || '-' }}</template>
                         </el-table-column>
-                        <el-table-column prop="enabled" label="状态" width="100">
+                        <el-table-column prop="priority" label="优先级" width="100">
                             <template #default="{ row }">
-                                <el-tag :type="row.enabled ? 'success' : 'danger'">{{ row.enabled ? '启用' : '禁用' }}</el-tag>
+                                <el-tag type="info">{{ row.priority || 100 }}</el-tag>
+                            </template>
+                        </el-table-column>
+                        <el-table-column prop="enabled" label="状态" width="200">
+                            <template #default="{ row }">
+                                <div style="display: flex; flex-direction: column; gap: 4px;">
+                                    <el-tag :type="row.enabled ? 'success' : 'danger'" size="small">{{ row.enabled ? '启用' : '禁用' }}</el-tag>
+                                    <div v-if="getBlacklistStatus(row.name)" style="display: flex; align-items: center; gap: 4px;">
+                                        <el-tag type="warning" size="small">小黑屋 {{ getBlacklistRemaining(row.name) }}</el-tag>
+                                        <el-button type="warning" size="small" link @click="removeFromBlacklist(row.name)" title="从小黑屋移除">
+                                            <el-icon><Close /></el-icon>
+                                        </el-button>
+                                    </div>
+                                </div>
                             </template>
                         </el-table-column>
                         <el-table-column label="操作" width="360" fixed="right">
@@ -92,6 +106,12 @@ const EndpointsComponent = {
                             <el-button @click="fetchModels" :loading="fetchingModels">获取模型</el-button>
                         </div>
                     </el-form-item>
+                    <el-form-item label="优先级" prop="priority">
+                        <el-input-number v-model="form.priority" :min="1" :max="999" :step="1" style="width: 100%;" />
+                        <div style="font-size: 12px; color: var(--el-text-color-secondary); margin-top: 4px;">
+                            数字越小优先级越高,默认为 100
+                        </div>
+                    </el-form-item>
                     <el-form-item label="备注">
                         <el-input v-model="form.remark" type="textarea" :rows="3" />
                     </el-form-item>
@@ -132,7 +152,7 @@ const EndpointsComponent = {
         </div>
     `,
     setup() {
-        const { ref, onMounted } = Vue;
+        const {ref, onMounted} = Vue;
 
         const loading = ref(true);
         const endpoints = ref([]);
@@ -148,61 +168,94 @@ const EndpointsComponent = {
         const availableModels = ref([]);
         const fetchingModels = ref(false);
         const testStatusMap = ref({});
+        const blacklistStatus = ref({});
 
         const form = ref({
-            name: '', apiUrl: '', apiKey: '', transformer: 'openai',
-            model: '', remark: '', enabled: true
+            name: "", apiUrl: "", apiKey: "", transformer: "openai",
+            model: "", remark: "", enabled: true, priority: 100
         });
 
         const rules = {
-            name: [{ required: true, message: '请输入名称', trigger: 'blur' }],
-            apiUrl: [{ required: true, message: '请输入API URL', trigger: 'blur' }],
-            transformer: [{ required: true, message: '请选择转换器', trigger: 'change' }]
+            name: [{required: true, message: "请输入名称", trigger: "blur"}],
+            apiUrl: [{required: true, message: "请输入API URL", trigger: "blur"}],
+            transformer: [{required: true, message: "请选择转换器", trigger: "change"}]
         };
 
         const transformerOptions = utils.getTransformerOptions();
         const getTransformerLabel = (t) => utils.getTransformerLabel(t);
-        const truncateUrl = (url) => url.length > 40 ? url.substring(0, 40) + '...' : url;
+        const truncateUrl = (url) => url.length > 40 ? url.substring(0, 40) + "..." : url;
 
         const loadEndpoints = async () => {
             loading.value = true;
             try {
                 const [data, current] = await Promise.all([
                     api.getEndpoints(),
-                    api.getCurrentEndpoint().catch(() => ({ name: null }))
+                    api.getCurrentEndpoint().catch(() => ({name: null}))
                 ]);
                 endpoints.value = data.endpoints || [];
                 currentEndpoint.value = current.name;
                 loadTestStatus();
+                loadBlacklistStatus();
             } catch (error) {
-                ElementPlus.ElMessage.error('加载失败: ' + error.message);
+                ElementPlus.ElMessage.error("加载失败: " + error.message);
             } finally {
                 loading.value = false;
             }
         };
 
+        const loadBlacklistStatus = () => {
+            setTimeout(async () => {
+                try {
+                    const result = await api.getBlacklistStatus();
+                    if (result.blacklist) {
+                        blacklistStatus.value = result.blacklist;
+                    }
+                } catch (error) {
+                    console.error("加载黑名单状态失败:", error);
+                } finally {
+                    loadBlacklistStatus();
+                }
+            }, 666);
+        };
+
         const loadTestStatus = () => {
             try {
-                testStatusMap.value = JSON.parse(localStorage.getItem('ccNexus_endpointTestStatus') || '{}');
-            } catch { testStatusMap.value = {}; }
+                testStatusMap.value = JSON.parse(localStorage.getItem("ccNexus_endpointTestStatus") || "{}");
+            } catch {
+                testStatusMap.value = {};
+            }
         };
 
         const saveTestStatus = (name, success) => {
             testStatusMap.value[name] = success;
-            localStorage.setItem('ccNexus_endpointTestStatus', JSON.stringify(testStatusMap.value));
+            localStorage.setItem("ccNexus_endpointTestStatus", JSON.stringify(testStatusMap.value));
         };
 
         const getTestStatus = (name) => testStatusMap.value[name];
 
+        const getBlacklistStatus = (name) => {
+            const status = blacklistStatus.value[name];
+            return status && status.blacklisted;
+        };
+
+        const getBlacklistRemaining = (name) => {
+            const status = blacklistStatus.value[name];
+            if (!status || !status.blacklisted || !status.remaining) {
+                return "";
+            }
+            // 格式化剩余时间
+            return status.remaining.replace("m0s", "分").replace("s", "秒").replace("m", "分");
+        };
+
         const showAddDialog = () => {
             isEdit.value = false;
-            form.value = { name: '', apiUrl: '', apiKey: '', transformer: 'openai', model: '', remark: '', enabled: true };
+            form.value = {name: "", apiUrl: "", apiKey: "", transformer: "openai", model: "", remark: "", enabled: true, priority: 100};
             dialogVisible.value = true;
         };
 
         const showEditDialog = (row) => {
             isEdit.value = true;
-            form.value = { ...row };
+            form.value = {...row};
             dialogVisible.value = true;
         };
 
@@ -210,21 +263,23 @@ const EndpointsComponent = {
             if (!formRef.value) return;
             try {
                 await formRef.value.validate();
-            } catch { return; }
+            } catch {
+                return;
+            }
             saving.value = true;
             try {
-                const data = { ...form.value };
-                if (isEdit.value && data.apiKey === '****') delete data.apiKey;
+                const data = {...form.value};
+                if (isEdit.value && data.apiKey === "****") delete data.apiKey;
                 if (isEdit.value) {
                     await api.updateEndpoint(data.name, data);
                 } else {
                     await api.createEndpoint(data);
                 }
-                ElementPlus.ElMessage.success(isEdit.value ? '更新成功' : '创建成功');
+                ElementPlus.ElMessage.success(isEdit.value ? "更新成功" : "创建成功");
                 dialogVisible.value = false;
                 await loadEndpoints();
             } catch (error) {
-                ElementPlus.ElMessage.error('保存失败: ' + error.message);
+                ElementPlus.ElMessage.error("保存失败: " + error.message);
             } finally {
                 saving.value = false;
             }
@@ -232,32 +287,32 @@ const EndpointsComponent = {
 
         const deleteEndpoint = async (name) => {
             try {
-                await ElementPlus.ElMessageBox.confirm('确定要删除节点 "' + name + '" 吗？', '确认删除', { type: 'warning' });
+                await ElementPlus.ElMessageBox.confirm("确定要删除节点 \"" + name + "\" 吗？", "确认删除", {type: "warning"});
                 await api.deleteEndpoint(name);
-                ElementPlus.ElMessage.success('删除成功');
+                ElementPlus.ElMessage.success("删除成功");
                 await loadEndpoints();
             } catch (error) {
-                if (error !== 'cancel') ElementPlus.ElMessage.error('删除失败: ' + error.message);
+                if (error !== "cancel") ElementPlus.ElMessage.error("删除失败: " + error.message);
             }
         };
 
         const toggleEndpoint = async (row) => {
             try {
                 await api.toggleEndpoint(row.name, !row.enabled);
-                ElementPlus.ElMessage.success(row.enabled ? '已禁用' : '已启用');
+                ElementPlus.ElMessage.success(row.enabled ? "已禁用" : "已启用");
                 await loadEndpoints();
             } catch (error) {
-                ElementPlus.ElMessage.error('操作失败: ' + error.message);
+                ElementPlus.ElMessage.error("操作失败: " + error.message);
             }
         };
 
         const switchEndpoint = async (name) => {
             try {
                 await api.switchEndpoint(name);
-                ElementPlus.ElMessage.success('已切换到: ' + name);
+                ElementPlus.ElMessage.success("已切换到: " + name);
                 await loadEndpoints();
             } catch (error) {
-                ElementPlus.ElMessage.error('切换失败: ' + error.message);
+                ElementPlus.ElMessage.error("切换失败: " + error.message);
             }
         };
 
@@ -270,7 +325,7 @@ const EndpointsComponent = {
                 testResultVisible.value = true;
                 await loadEndpoints();
             } catch (error) {
-                testResult.value = { success: false, error: error.message };
+                testResult.value = {success: false, error: error.message};
                 saveTestStatus(name, false);
                 testResultVisible.value = true;
             } finally {
@@ -279,21 +334,21 @@ const EndpointsComponent = {
         };
 
         const fetchModels = async () => {
-            if (!form.value.apiUrl || !form.value.apiKey || form.value.apiKey === '****') {
-                ElementPlus.ElMessage.warning('请先填写 API URL 和 API Key');
+            if (!form.value.apiUrl || !form.value.apiKey || form.value.apiKey === "****") {
+                ElementPlus.ElMessage.warning("请先填写 API URL 和 API Key");
                 return;
             }
             fetchingModels.value = true;
             try {
                 const result = await api.fetchModels(form.value.apiUrl, form.value.apiKey, form.value.transformer);
                 if (result.models && result.models.length > 0) {
-                    availableModels.value = result.models.map(m => ({ id: m }));
+                    availableModels.value = result.models.map(m => ({id: m}));
                     modelDialogVisible.value = true;
                 } else {
-                    ElementPlus.ElMessage.info('未找到模型');
+                    ElementPlus.ElMessage.info("未找到模型");
                 }
             } catch (error) {
-                ElementPlus.ElMessage.error('获取模型失败: ' + error.message);
+                ElementPlus.ElMessage.error("获取模型失败: " + error.message);
             } finally {
                 fetchingModels.value = false;
             }
@@ -302,11 +357,21 @@ const EndpointsComponent = {
         const selectModel = (row) => {
             form.value.model = row.id;
             modelDialogVisible.value = false;
-            ElementPlus.ElMessage.success('已选择: ' + row.id);
+            ElementPlus.ElMessage.success("已选择: " + row.id);
         };
 
         const copyUrl = (url) => {
-            navigator.clipboard.writeText(url).then(() => ElementPlus.ElMessage.success('已复制'));
+            navigator.clipboard.writeText(url).then(() => ElementPlus.ElMessage.success("已复制"));
+        };
+
+        const removeFromBlacklist = async (name) => {
+            try {
+                await api.removeFromBlacklist(name);
+                ElementPlus.ElMessage.success("已从小黑屋移除: " + name);
+                await loadBlacklistStatus();
+            } catch (error) {
+                ElementPlus.ElMessage.error("移除失败: " + error.message);
+            }
         };
 
         onMounted(() => loadEndpoints());
@@ -315,8 +380,8 @@ const EndpointsComponent = {
             loading, endpoints, currentEndpoint, dialogVisible, isEdit, saving, formRef,
             form, rules, transformerOptions, testingEndpoint, testResultVisible, testResult,
             modelDialogVisible, availableModels, fetchingModels,
-            getTransformerLabel, getTestStatus, truncateUrl, showAddDialog, showEditDialog, saveEndpoint,
-            deleteEndpoint, toggleEndpoint, switchEndpoint, testEndpoint, fetchModels, selectModel, copyUrl
+            getTransformerLabel, getTestStatus, getBlacklistStatus, getBlacklistRemaining, truncateUrl, showAddDialog, showEditDialog, saveEndpoint,
+            deleteEndpoint, toggleEndpoint, switchEndpoint, testEndpoint, fetchModels, selectModel, copyUrl, removeFromBlacklist
         };
     }
 };

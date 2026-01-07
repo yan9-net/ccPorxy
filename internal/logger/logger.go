@@ -172,7 +172,7 @@ func (l *Logger) Clear() {
 	l.entries = make([]LogEntry, 0)
 }
 
-// Convenience methods
+// Debug Convenience methods
 func Debug(format string, args ...interface{}) {
 	GetLogger().Log(DEBUG, format, args...)
 }

@@ -28,7 +28,17 @@ func (p *Proxy) handleHealth(w http.ResponseWriter, r *http.Request) {
 func (p *Proxy) handleStats(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	stats := p.GetStats()
-	json.NewEncoder(w).Encode(stats)
+
+	// 添加黑名单状态信息
+	response := map[string]interface{}{
+		"stats": stats,
+	}
+
+	if p.blacklist != nil {
+		response["blacklist"] = p.blacklist.GetBlacklistStatus()
+	}
+
+	json.NewEncoder(w).Encode(response)
 }
 
 // GetStats returns current statistics

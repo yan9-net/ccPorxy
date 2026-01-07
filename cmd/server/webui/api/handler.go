@@ -37,6 +37,9 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/endpoints/reorder", h.handleReorderEndpoints)
 	mux.HandleFunc("/api/endpoints/fetch-models", h.handleFetchModels)
 
+	// Blacklist management
+	mux.HandleFunc("/api/blacklist/status", h.handleBlacklistStatus)
+
 	// Statistics
 	mux.HandleFunc("/api/stats/summary", h.handleStatsSummary)
 	mux.HandleFunc("/api/stats/daily", h.handleStatsDaily)

@@ -12,6 +12,7 @@ type Endpoint struct {
 	Model       string    `json:"model"`
 	Remark      string    `json:"remark"`
 	SortOrder   int       `json:"sortOrder"`
+	Priority    int       `json:"priority"` // 优先级，数字越小优先级越高
 	CreatedAt   time.Time `json:"createdAt"`
 	UpdatedAt   time.Time `json:"updatedAt"`
 }

@@ -44,6 +44,7 @@ type Proxy struct {
 	endpointCancel    map[string]context.CancelFunc // cancel functions per endpoint
 	ctxMu             sync.RWMutex                  // protects context maps
 	onEndpointSuccess func(endpointName string)     // callback when endpoint request succeeds
+	blacklist         *BlacklistManager             // manages endpoint failure and blacklisting
 }
 
 // New creates a new Proxy instance
@@ -57,6 +58,7 @@ func New(cfg *config.Config, statsStorage StatsStorage, deviceID string) *Proxy 
 		activeRequests: make(map[string]bool),
 		endpointCtx:    make(map[string]context.Context),
 		endpointCancel: make(map[string]context.CancelFunc),
+		blacklist:      NewBlacklistManager(),
 	}
 }
 
@@ -92,10 +94,25 @@ func (p *Proxy) StartWithMux(customMux *http.ServeMux) error {
 		Handler: mux,
 	}
 
+	// Start blacklist cleanup goroutine
+	go p.startBlacklistCleaner()
+
 	logger.Info("ccNexus starting on port %d", port)
 	logger.Info("Configured %d endpoints", len(p.config.GetEndpoints()))
 
 	return p.server.ListenAndServe()
+}
+
+// startBlacklistCleaner periodically cleans expired blacklist entries
+func (p *Proxy) startBlacklistCleaner() {
+	ticker := time.NewTicker(1 * time.Minute)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		if p.blacklist != nil {
+			p.blacklist.CleanExpired()
+		}
+	}
 }
 
 // Stop stops the proxy server
@@ -106,31 +123,45 @@ func (p *Proxy) Stop() error {
 	return nil
 }
 
-// getEnabledEndpoints returns only the enabled endpoints
+// getEnabledEndpoints returns only the enabled endpoints that are not blacklisted
+// Endpoints are already sorted by priority (lower number = higher priority) from database
 func (p *Proxy) getEnabledEndpoints() []config.Endpoint {
 	allEndpoints := p.config.GetEndpoints()
 	enabled := make([]config.Endpoint, 0)
 	for _, ep := range allEndpoints {
-		if ep.Enabled {
-			enabled = append(enabled, ep)
+		// Skip disabled endpoints
+		if !ep.Enabled {
+			continue
 		}
+		// Skip blacklisted endpoints
+		if p.blacklist != nil && p.blacklist.IsBlacklisted(ep.Name) {
+			logger.Debug("[BLACKLIST] Skipping blacklisted endpoint: %s", ep.Name)
+			continue
+		}
+		enabled = append(enabled, ep)
 	}
 	return enabled
 }
 
-// getCurrentEndpoint returns the current endpoint (thread-safe)
-func (p *Proxy) getCurrentEndpoint() config.Endpoint {
+// getCurrentEndpoint 返回优先级最高的一个可用节点 (thread-safe)
+func (p *Proxy) getCurrentEndpoint() *config.Endpoint {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 
 	endpoints := p.getEnabledEndpoints()
 	if len(endpoints) == 0 {
-		// Return empty endpoint if no enabled endpoints
-		return config.Endpoint{}
+		return nil
 	}
-	// Make sure currentIndex is within bounds
-	index := p.currentIndex % len(endpoints)
-	return endpoints[index]
+
+	for _, ep := range endpoints {
+		//判断是否在黑名单内
+		if p.blacklist != nil && p.blacklist.IsBlacklisted(ep.Name) {
+			logger.Debug("[BLACKLIST] Skipping blacklisted endpoint: %s", ep.Name)
+			continue
+		}
+		return &ep
+	}
+	return nil
 }
 
 // markRequestActive marks an endpoint as having active requests
@@ -140,7 +171,7 @@ func (p *Proxy) markRequestActive(endpointName string) {
 	p.activeRequests[endpointName] = true
 }
 
-// markRequestInactive marks an endpoint as having no active requests
+// markRequestInactive 标记一个节点为没有请求
 func (p *Proxy) markRequestInactive(endpointName string) {
 	p.activeRequestsMu.Lock()
 	defer p.activeRequestsMu.Unlock()
@@ -157,6 +188,9 @@ func (p *Proxy) hasActiveRequests(endpointName string) bool {
 // isCurrentEndpoint checks if the given endpoint is still the current one
 func (p *Proxy) isCurrentEndpoint(endpointName string) bool {
 	current := p.getCurrentEndpoint()
+	if current == nil {
+		return false
+	}
 	return current.Name == endpointName
 }
 
@@ -235,6 +269,9 @@ func (p *Proxy) rotateEndpoint() config.Endpoint {
 // GetCurrentEndpointName returns the current endpoint name (thread-safe)
 func (p *Proxy) GetCurrentEndpointName() string {
 	endpoint := p.getCurrentEndpoint()
+	if endpoint == nil {
+		return ""
+	}
 	return endpoint.Name
 }
 
@@ -267,6 +304,21 @@ func (p *Proxy) SetCurrentEndpoint(targetName string) error {
 	return fmt.Errorf("endpoint '%s' not found or not enabled", targetName)
 }
 
+// RemoveFromBlacklist removes an endpoint from the blacklist
+func (p *Proxy) RemoveFromBlacklist(endpointName string) {
+	if p.blacklist != nil {
+		p.blacklist.Reset(endpointName)
+	}
+}
+
+// GetBlacklistStatus returns the current blacklist status for all endpoints
+func (p *Proxy) GetBlacklistStatus() map[string]interface{} {
+	if p.blacklist != nil {
+		return p.blacklist.GetBlacklistStatus()
+	}
+	return make(map[string]interface{})
+}
+
 // ClientFormat represents the API format used by the client
 type ClientFormat string
 
@@ -290,6 +342,19 @@ func detectClientFormat(path string) ClientFormat {
 
 // handleProxy handles the main proxy logic
 func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == "/" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(200)
+		data := map[string]interface{}{
+			"version": "1.0.0",
+			"status":  "ok",
+		}
+		if err := json.NewEncoder(w).Encode(data); err != nil {
+			logger.Error("Failed to encode JSON response: %v", err)
+		}
+		return
+	}
+
 	bodyBytes, err := io.ReadAll(r.Body)
 	if err != nil {
 		logger.Error("Failed to read request body: %v", err)
@@ -300,10 +365,6 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 
 	// Detect client format
 	clientFormat := detectClientFormat(r.URL.Path)
-
-	logger.DebugLog("=== Proxy Request ===")
-	logger.DebugLog("Method: %s, Path: %s, ClientFormat: %s", r.Method, r.URL.Path, clientFormat)
-	logger.DebugLog("Request Body: %s", string(bodyBytes))
 
 	var streamReq struct {
 		Model    string      `json:"model"`
@@ -319,183 +380,167 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	maxRetries := len(endpoints) * 2
-	endpointAttempts := 0
-	lastEndpointName := ""
-
-	for retry := 0; retry < maxRetries; retry++ {
-		endpoint := p.getCurrentEndpoint()
-		if endpoint.Name == "" {
-			http.Error(w, "No enabled endpoints available", http.StatusServiceUnavailable)
+	// 新的重试逻辑：按优先级顺序尝试每个节点，每个节点最多重试3次
+	for {
+		_endpoint := p.getCurrentEndpoint()
+		if _endpoint == nil {
+			http.Error(w, "No enabled endpoints configured", http.StatusServiceUnavailable)
 			return
 		}
+		endpoint := *_endpoint
 
-		// Reset attempts counter if endpoint changed (e.g., manual switch)
-		if lastEndpointName != "" && lastEndpointName != endpoint.Name {
-			endpointAttempts = 0
-		}
-		lastEndpointName = endpoint.Name
+		// 尝试当前节点最多3次
+		for retryCount := 0; retryCount < MaxRetries; retryCount++ {
+			p.markRequestActive(endpoint.Name)
+			p.stats.RecordRequest(endpoint.Name)
 
-		endpointAttempts++
-		p.markRequestActive(endpoint.Name)
-		p.stats.RecordRequest(endpoint.Name)
-
-		trans, err := prepareTransformerForClient(clientFormat, endpoint)
-		if err != nil {
-			logger.Error("[%s] %v", endpoint.Name, err)
-			p.stats.RecordError(endpoint.Name)
-			p.markRequestInactive(endpoint.Name)
-			if endpointAttempts >= 2 {
-				p.rotateEndpoint()
-				endpointAttempts = 0
+			//根据节点名称获取对应的transformer
+			trans, err := prepareTransformerForClient(clientFormat, endpoint)
+			if err != nil {
+				p.stats.RecordError(endpoint.Name)
+				p.markRequestInactive(endpoint.Name)
+				p.blacklist.RecordFailure(endpoint.Name) // Transformer错误直接放弃此节点，不重试
+				break
 			}
-			continue
-		}
 
-		transformerName := trans.Name()
-
-		transformedBody, err := trans.TransformRequest(bodyBytes)
-		if err != nil {
-			logger.Error("[%s] Failed to transform request: %v", endpoint.Name, err)
-			p.stats.RecordError(endpoint.Name)
-			p.markRequestInactive(endpoint.Name)
-			if endpointAttempts >= 2 {
-				p.rotateEndpoint()
-				endpointAttempts = 0
+			transformerName := trans.Name()
+			//替换模型
+			transformedBody, err := trans.TransformRequest(bodyBytes) //
+			if err != nil {
+				logger.Error("[%s] Failed to transform request: %v", endpoint.Name, err)
+				p.stats.RecordError(endpoint.Name)
+				p.markRequestInactive(endpoint.Name)
+				p.blacklist.RecordFailure(endpoint.Name) // Transform错误直接放弃此节点，不重试
+				break
 			}
-			continue
-		}
 
-		logger.DebugLog("[%s] Transformer: %s", endpoint.Name, transformerName)
-		logger.DebugLog("[%s] Transformed Request: %s", endpoint.Name, string(transformedBody))
+			cleanedBody, err := cleanIncompleteToolCalls(transformedBody)
+			if err != nil {
+				logger.Warn("[%s] Failed to clean tool calls: %v", endpoint.Name, err)
+				cleanedBody = transformedBody
+			}
+			transformedBody = cleanedBody
 
-		cleanedBody, err := cleanIncompleteToolCalls(transformedBody)
-		if err != nil {
-			logger.Warn("[%s] Failed to clean tool calls: %v", endpoint.Name, err)
-			cleanedBody = transformedBody
-		}
-		transformedBody = cleanedBody
-
-		var thinkingEnabled bool
-		if strings.Contains(transformerName, "openai") {
-			var openaiReq map[string]interface{}
-			if err := json.Unmarshal(transformedBody, &openaiReq); err == nil {
-				if enable, ok := openaiReq["enable_thinking"].(bool); ok {
-					thinkingEnabled = enable
+			var thinkingEnabled bool
+			if strings.Contains(transformerName, "openai") {
+				var openaiReq map[string]interface{}
+				if err := json.Unmarshal(transformedBody, &openaiReq); err == nil {
+					if enable, ok := openaiReq["enable_thinking"].(bool); ok {
+						thinkingEnabled = enable
+					}
 				}
 			}
-		}
 
-		proxyReq, err := buildProxyRequest(r, endpoint, transformedBody, transformerName)
-		if err != nil {
-			logger.Error("[%s] Failed to create request: %v", endpoint.Name, err)
-			p.stats.RecordError(endpoint.Name)
-			p.markRequestInactive(endpoint.Name)
-			if endpointAttempts >= 2 {
-				p.rotateEndpoint()
-				endpointAttempts = 0
-			}
-			continue
-		}
-
-		ctx := p.getEndpointContext(endpoint.Name)
-		resp, err := sendRequest(ctx, proxyReq, p.config)
-		if err != nil {
-			logger.Error("[%s] Request failed: %v", endpoint.Name, err)
-			p.stats.RecordError(endpoint.Name)
-			p.markRequestInactive(endpoint.Name)
-			if endpointAttempts >= 2 {
-				p.rotateEndpoint()
-				endpointAttempts = 0
-			}
-			continue
-		}
-
-		contentType := resp.Header.Get("Content-Type")
-		isStreaming := contentType == "text/event-stream" || (streamReq.Stream && strings.Contains(contentType, "text/event-stream"))
-
-		if resp.StatusCode == http.StatusOK && isStreaming {
-			inputTokens, outputTokens, outputText := p.handleStreamingResponse(w, resp, endpoint, trans, transformerName, thinkingEnabled, streamReq.Model, bodyBytes)
-
-			// Fallback: estimate tokens when usage is 0
-			if inputTokens == 0 || outputTokens == 0 {
-				inputTokens, outputTokens = p.estimateTokens(bodyBytes, outputText, inputTokens, outputTokens, endpoint.Name)
+			proxyReq, err := buildProxyRequest(r, endpoint, transformedBody, transformerName)
+			if err != nil {
+				logger.Error("[%s] Failed to create request: %v", endpoint.Name, err)
+				p.stats.RecordError(endpoint.Name)
+				p.markRequestInactive(endpoint.Name)
+				p.blacklist.RecordFailure(endpoint.Name)
+				// 请求构建失败，继续重试
+				continue
 			}
 
-			p.stats.RecordTokens(endpoint.Name, inputTokens, outputTokens)
-			p.markRequestInactive(endpoint.Name)
-			if p.onEndpointSuccess != nil {
-				p.onEndpointSuccess(endpoint.Name)
+			ctx := p.getEndpointContext(endpoint.Name)
+			resp, err := sendRequest(ctx, proxyReq, p.config)
+			if err != nil {
+				logger.Error("[%s] Request failed: %v", endpoint.Name, err)
+				p.stats.RecordError(endpoint.Name)
+				p.markRequestInactive(endpoint.Name)
+				p.blacklist.RecordFailure(endpoint.Name)
+				continue
 			}
-			logger.Debug("[%s] Request completed successfully (streaming)", endpoint.Name)
-			return
-		}
 
-		if resp.StatusCode == http.StatusOK {
-			inputTokens, outputTokens, err := p.handleNonStreamingResponse(w, resp, endpoint, trans)
-			if err == nil {
+			contentType := resp.Header.Get("Content-Type")
+			isStreaming := contentType == "text/event-stream" || (streamReq.Stream && strings.Contains(contentType, "text/event-stream"))
+
+			if resp.StatusCode == http.StatusOK && isStreaming {
+				inputTokens, outputTokens, outputText := p.handleStreamingResponse(w, resp, endpoint, trans, transformerName, thinkingEnabled, streamReq.Model, bodyBytes)
+
+				// Fallback: estimate tokens when usage is 0
+				if inputTokens == 0 || outputTokens == 0 {
+					inputTokens, outputTokens = p.estimateTokens(bodyBytes, outputText, inputTokens, outputTokens, endpoint.Name)
+				}
+
 				p.stats.RecordTokens(endpoint.Name, inputTokens, outputTokens)
 				p.markRequestInactive(endpoint.Name)
+				p.blacklist.RecordSuccess(endpoint.Name)
 				if p.onEndpointSuccess != nil {
 					p.onEndpointSuccess(endpoint.Name)
 				}
-				logger.Debug("[%s] Request completed successfully", endpoint.Name)
 				return
 			}
-		}
 
-		if shouldRetry(resp.StatusCode) {
-			var errBody []byte
-			if resp.Header.Get("Content-Encoding") == "gzip" {
-				errBody, _ = decompressGzip(resp.Body)
-			} else {
-				errBody, _ = io.ReadAll(resp.Body)
+			if resp.StatusCode == http.StatusOK {
+				inputTokens, outputTokens, err := p.handleNonStreamingResponse(w, resp, endpoint, trans)
+				if err == nil {
+					p.stats.RecordTokens(endpoint.Name, inputTokens, outputTokens)
+					p.markRequestInactive(endpoint.Name)
+					p.blacklist.RecordSuccess(endpoint.Name)
+					if p.onEndpointSuccess != nil {
+						p.onEndpointSuccess(endpoint.Name)
+					}
+					return
+				}
 			}
-			resp.Body.Close()
-			errMsg := string(errBody)
-			if len(errMsg) > 200 {
-				errMsg = errMsg[:200] + "..."
-			}
-			logger.Warn("[%s] Request failed %d: %s", endpoint.Name, resp.StatusCode, errMsg)
-			logger.DebugLog("[%s] Request failed %d: %s", endpoint.Name, resp.StatusCode, errMsg)
-			p.stats.RecordError(endpoint.Name)
-			p.markRequestInactive(endpoint.Name)
-			if endpointAttempts >= 2 {
-				p.rotateEndpoint()
-				endpointAttempts = 0
-			}
-			continue
-		}
 
-		var respBody []byte
-		if resp.Header.Get("Content-Encoding") == "gzip" {
-			respBody, _ = decompressGzip(resp.Body)
-		} else {
-			respBody, _ = io.ReadAll(resp.Body)
-		}
-		resp.Body.Close()
-		p.markRequestInactive(endpoint.Name)
-		// Log non-200 responses for debugging
-		if resp.StatusCode != http.StatusOK {
-			errMsg := string(respBody)
-			if len(errMsg) > 500 {
-				errMsg = errMsg[:500] + "..."
-			}
-			logger.Warn("[%s] Response %d: %s", endpoint.Name, resp.StatusCode, errMsg)
-			logger.DebugLog("[%s] Response %d: %s", endpoint.Name, resp.StatusCode, errMsg)
-		}
-		// Remove Content-Encoding header since we've decompressed
-		for key, values := range resp.Header {
-			if key == "Content-Encoding" || key == "Content-Length" {
+			if shouldRetry(resp.StatusCode) {
+				var errBody []byte
+				if resp.Header.Get("Content-Encoding") == "gzip" {
+					errBody, _ = decompressGzip(resp.Body)
+				} else {
+					errBody, _ = io.ReadAll(resp.Body)
+				}
+				resp.Body.Close()
+				errMsg := string(errBody)
+
+				if len(errMsg) > 200 {
+					errMsg = errMsg[:200] + "..."
+				}
+				logger.Warn("[%s] Request failed %d: %s", endpoint.Name, resp.StatusCode, errMsg)
+				logger.DebugLog("[%s] Request failed %d: %s", endpoint.Name, resp.StatusCode, errMsg)
+				p.stats.RecordError(endpoint.Name)
+				p.markRequestInactive(endpoint.Name)
+				p.blacklist.RecordFailure(endpoint.Name)
+				// 可重试的错误，继续重试当前节点
 				continue
 			}
-			for _, value := range values {
-				w.Header().Add(key, value)
+
+			// 非200且非可重试的状态码，直接返回给客户端
+			var respBody []byte
+			if resp.Header.Get("Content-Encoding") == "gzip" {
+				respBody, _ = decompressGzip(resp.Body)
+			} else {
+				respBody, _ = io.ReadAll(resp.Body)
 			}
+			resp.Body.Close()
+			p.markRequestInactive(endpoint.Name)
+			p.blacklist.RecordFailure(endpoint.Name)
+			// Log non-200 responses for debugging
+			if resp.StatusCode != http.StatusOK {
+				errMsg := string(respBody)
+				if len(errMsg) > 500 {
+					errMsg = errMsg[:500] + "..."
+				}
+				logger.Warn("[%s] Response %d: %s", endpoint.Name, resp.StatusCode, errMsg)
+				logger.DebugLog("[%s] Response %d: %s", endpoint.Name, resp.StatusCode, errMsg)
+			}
+			// Remove Content-Encoding header since we've decompressed
+			for key, values := range resp.Header {
+				if key == "Content-Encoding" || key == "Content-Length" {
+					continue
+				}
+				for _, value := range values {
+					w.Header().Add(key, value)
+				}
+			}
+			w.WriteHeader(resp.StatusCode)
+			w.Write(respBody)
+			return
 		}
-		w.WriteHeader(resp.StatusCode)
-		w.Write(respBody)
-		return
+
+		// 当前节点3次重试都失败了，尝试下一个节点
+		logger.Warn("[%s] All %d retries failed, trying next endpoint", endpoint.Name, MaxRetries)
 	}
 
 	http.Error(w, "All endpoints failed", http.StatusServiceUnavailable)

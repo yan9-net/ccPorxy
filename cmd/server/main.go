@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sort"
 	"strconv"
 	"syscall"
 
@@ -102,7 +103,13 @@ func loadConfig(pgStorage *storage.PostgreSQLStorage) (*config.Config, error) {
 	// Seed a default endpoint when none are configured to avoid boot failure
 	if len(cfg.Endpoints) == 0 {
 		logger.Warn("No endpoints found; seeding a default endpoint")
+
 		cfg.Endpoints = config.DefaultConfig().Endpoints
+		//config.Endpoints 根据Priority从小到大排序
+		sort.Slice(cfg.Endpoints, func(i, j int) bool {
+			return cfg.Endpoints[i].Priority < cfg.Endpoints[j].Priority
+		})
+
 		if saveErr := cfg.SaveToStorage(adapter); saveErr != nil {
 			logger.Warn("Failed to persist seeded endpoint: %v", saveErr)
 		}

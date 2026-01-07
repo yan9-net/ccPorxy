@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strconv"
 	"sync"
 )
@@ -16,8 +17,8 @@ type Endpoint struct {
 	Transformer string `json:"transformer,omitempty"` // Transformer type: claude, openai, gemini, deepseek
 	Model       string `json:"model,omitempty"`       // Target model name for non-Claude APIs
 	Remark      string `json:"remark,omitempty"`      // Optional remark for the endpoint
+	Priority    int    `json:"priority,omitempty"`    // Priority (lower number = higher priority)
 }
-
 
 // UpdateConfig represents update configuration
 type UpdateConfig struct {
@@ -72,6 +73,7 @@ func DefaultConfig() *Config {
 				APIKey:      "your-api-key-here",
 				Enabled:     true,
 				Transformer: "claude",
+				Priority:    100,
 			},
 		},
 		Update: &UpdateConfig{
@@ -145,6 +147,10 @@ func (c *Config) UpdateEndpoints(endpoints []Endpoint) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.Endpoints = endpoints
+	//config.Endpoints 根据Priority从小到大排序
+	sort.Slice(c.Endpoints, func(i, j int) bool {
+		return c.Endpoints[i].Priority < c.Endpoints[j].Priority
+	})
 }
 
 // UpdatePort updates the port (thread-safe)
@@ -338,6 +344,7 @@ type StorageEndpoint struct {
 	Model       string
 	Remark      string
 	SortOrder   int
+	Priority    int
 }
 
 // LoadFromStorage loads configuration from SQLite storage
@@ -361,12 +368,21 @@ func LoadFromStorage(storage StorageAdapter) (*Config, error) {
 			Transformer: ep.Transformer,
 			Model:       ep.Model,
 			Remark:      ep.Remark,
+			Priority:    ep.Priority,
 		}
 		if endpoint.Transformer == "" {
 			endpoint.Transformer = "claude"
 		}
+		if endpoint.Priority == 0 {
+			endpoint.Priority = 100 // 默认优先级
+		}
 		config.Endpoints = append(config.Endpoints, endpoint)
 	}
+
+	//config.Endpoints 根据Priority从小到大排序
+	sort.Slice(config.Endpoints, func(i, j int) bool {
+		return config.Endpoints[i].Priority < config.Endpoints[j].Priority
+	})
 
 	// Load app config
 	if portStr, err := storage.GetConfig("port"); err == nil && portStr != "" {
@@ -516,7 +532,8 @@ func (c *Config) SaveToStorage(storage StorageAdapter) error {
 			Transformer: ep.Transformer,
 			Model:       ep.Model,
 			Remark:      ep.Remark,
-			SortOrder:   i, // Use array index as sort order
+			SortOrder:   i,           // Use array index as sort order
+			Priority:    ep.Priority, // 优先级
 		}
 
 		if existingNames[ep.Name] {

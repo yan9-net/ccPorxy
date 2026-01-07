@@ -21,7 +21,8 @@ func normalizeAPIUrl(apiUrl string) string {
 func shouldRetry(statusCode int) bool {
 	return statusCode != http.StatusOK &&
 		statusCode != http.StatusBadRequest &&
-		statusCode != http.StatusUnauthorized
+		statusCode != http.StatusUnauthorized &&
+		statusCode != http.StatusNotFound
 }
 
 // cleanIncompleteToolCalls removes incomplete tool_use blocks from request

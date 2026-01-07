@@ -70,6 +70,15 @@ const api = {
         return this.request('POST', '/endpoints/fetch-models', { apiUrl, apiKey, transformer });
     },
 
+    // Blacklist management
+    async getBlacklistStatus() {
+        return this.request('GET', '/blacklist/status');
+    },
+
+    async removeFromBlacklist(name) {
+        return this.request('POST', `/endpoints/${encodeURIComponent(name)}/unblacklist`);
+    },
+
     // Statistics
     async getStatsSummary() {
         return this.request('GET', '/stats/summary');
@@ -89,6 +98,10 @@ const api = {
 
     async getStatsTrends() {
         return this.request('GET', '/stats/trends');
+    },
+
+    async getStats() {
+        return this.request('GET', '/stats');
     },
 
     // Configuration
