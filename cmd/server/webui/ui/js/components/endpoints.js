@@ -152,7 +152,7 @@ const EndpointsComponent = {
         </div>
     `,
     setup() {
-        const {ref, onMounted} = Vue;
+        const {ref, onMounted, onUnmounted} = Vue;
 
         const loading = ref(true);
         const endpoints = ref([]);
@@ -195,7 +195,6 @@ const EndpointsComponent = {
                 endpoints.value = data.endpoints || [];
                 currentEndpoint.value = current.name;
                 loadTestStatus();
-                loadBlacklistStatus();
             } catch (error) {
                 ElementPlus.ElMessage.error("加载失败: " + error.message);
             } finally {
@@ -203,6 +202,7 @@ const EndpointsComponent = {
             }
         };
 
+        let loadBlacklisting = false;
         const loadBlacklistStatus = () => {
             setTimeout(async () => {
                 try {
@@ -213,9 +213,9 @@ const EndpointsComponent = {
                 } catch (error) {
                     console.error("加载黑名单状态失败:", error);
                 } finally {
-                    loadBlacklistStatus();
+                    loadBlacklisting && loadBlacklistStatus();
                 }
-            }, 666);
+            }, 1300);
         };
 
         const loadTestStatus = () => {
@@ -368,13 +368,19 @@ const EndpointsComponent = {
             try {
                 await api.removeFromBlacklist(name);
                 ElementPlus.ElMessage.success("已从小黑屋移除: " + name);
-                await loadBlacklistStatus();
             } catch (error) {
                 ElementPlus.ElMessage.error("移除失败: " + error.message);
             }
         };
 
-        onMounted(() => loadEndpoints());
+        onMounted(() => {
+            loadBlacklisting = true;
+            loadEndpoints().then(loadBlacklistStatus);
+        });
+
+        onUnmounted(() => {
+            loadBlacklisting = false;
+        });
 
         return {
             loading, endpoints, currentEndpoint, dialogVisible, isEdit, saving, formRef,
