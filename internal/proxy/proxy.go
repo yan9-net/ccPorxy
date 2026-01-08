@@ -133,11 +133,6 @@ func (p *Proxy) getEnabledEndpoints() []config.Endpoint {
 		if !ep.Enabled {
 			continue
 		}
-		// Skip blacklisted endpoints
-		if p.blacklist != nil && p.blacklist.IsBlacklisted(ep.Name) {
-			logger.Debug("[BLACKLIST] Skipping blacklisted endpoint: %s", ep.Name)
-			continue
-		}
 		enabled = append(enabled, ep)
 	}
 	return enabled
@@ -156,7 +151,6 @@ func (p *Proxy) getCurrentEndpoint() *config.Endpoint {
 	for _, ep := range endpoints {
 		//判断是否在黑名单内
 		if p.blacklist != nil && p.blacklist.IsBlacklisted(ep.Name) {
-			logger.Debug("[BLACKLIST] Skipping blacklisted endpoint: %s", ep.Name)
 			continue
 		}
 		return &ep
@@ -494,9 +488,9 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 				resp.Body.Close()
 				errMsg := string(errBody)
 
-				if len(errMsg) > 200 {
-					errMsg = errMsg[:200] + "..."
-				}
+				//if len(errMsg) > 200 {
+				//	errMsg = errMsg[:200] + "..."
+				//}
 				logger.Warn("[%s] Request failed %d: %s", endpoint.Name, resp.StatusCode, errMsg)
 				logger.DebugLog("[%s] Request failed %d: %s", endpoint.Name, resp.StatusCode, errMsg)
 				p.stats.RecordError(endpoint.Name)

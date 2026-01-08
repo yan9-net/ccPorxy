@@ -44,7 +44,7 @@ func prepareCCTransformer(endpoint config.Endpoint, endpointTransformer string) 
 	switch endpointTransformer {
 	case "claude":
 		if endpoint.Model != "" {
-			logger.Debug("[%s] Using cc_claude with model override: %s", endpoint.Name, endpoint.Model)
+			//logger.Debug("[%s] Using cc_claude with model override: %s", endpoint.Name, endpoint.Model)
 			return cc.NewClaudeTransformerWithModel(endpoint.Model), nil
 		}
 		return cc.NewClaudeTransformer(), nil
