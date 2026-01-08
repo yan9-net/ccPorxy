@@ -138,18 +138,15 @@ func (p *Proxy) UpdateConfig(cfg *config.Config) error {
 			if ep.Name == currentEndpointName {
 				p.currentIndex = i
 				found = true
-				logger.Debug("[CONFIG UPDATE] Preserved current endpoint: %s at index %d", currentEndpointName, i)
 				break
 			}
 		}
 		if !found {
 			p.currentIndex = 0
-			logger.Debug("[CONFIG UPDATE] Current endpoint '%s' not found, reset to index 0", currentEndpointName)
 		}
 	} else {
 		p.currentIndex = 0
 	}
 
-	logger.Info("Configuration updated: %d endpoints configured", len(cfg.GetEndpoints()))
 	return nil
 }
