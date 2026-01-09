@@ -12,7 +12,7 @@ export const useEndpointsStore = defineStore("endpoints", () => {
         loading.value = true;
         try {
             const data = await endpointsApi.getEndpoints();
-            endpoints.value = (data || {endpoints: []}).endpoints;
+            endpoints.value = (data || {endpoints: []}).endpoints || [];
             return data;
         } catch (error) {
             console.error("Failed to fetch endpoints:", error);
