@@ -383,6 +383,8 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 		}
 		endpoint := *_endpoint
 
+		longRetryCount := 0
+
 		// 尝试当前节点最多3次
 		for retryCount := 0; retryCount < MaxRetries; retryCount++ {
 			p.markRequestActive(endpoint.Name)
@@ -487,6 +489,16 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 				}
 				resp.Body.Close()
 				errMsg := string(errBody)
+
+				//处理一些不需要加入黑名单的情况
+				if strings.Contains(errMsg, " not found") || strings.Contains(errMsg, "No available Antigravity account") {
+					if longRetryCount < 5 {
+						logger.DebugLog("[%s][%s] Request failed %d: %s", endpoint.Name, proxyReq.RequestURI, resp.StatusCode, errMsg)
+						retryCount--
+						longRetryCount++
+						continue
+					}
+				}
 
 				//if len(errMsg) > 200 {
 				//	errMsg = errMsg[:200] + "..."

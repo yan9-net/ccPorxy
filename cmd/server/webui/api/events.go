@@ -45,30 +45,31 @@ func (h *Handler) handleEvents(w http.ResponseWriter, r *http.Request) {
 	for {
 		select {
 		case <-ctx.Done():
-			// Client disconnected
-			logger.Debug("[SSE] Client disconnected")
 			return
 		case <-ticker.C:
 			// Send stats update
 			stats := h.proxy.GetStats()
 
 			// Get current endpoint
-			endpoints := h.config.GetEndpoints()
-			var currentEndpoint string
-			if len(endpoints) > 0 {
-				for _, ep := range endpoints {
-					if ep.Enabled {
-						currentEndpoint = ep.Name
-						break
-					}
-				}
-			}
+			//endpoints := h.config.GetEndpoints()
+			//var currentEndpoint string
+			//if len(endpoints) > 0 {
+			//	for _, ep := range endpoints {
+			//		if ep.Enabled {
+			//			currentEndpoint = ep.Name
+			//			break
+			//		}
+			//	}
+			//}
+
+			blacks := h.proxy.GetBlacklistStatus()
 
 			event := map[string]interface{}{
-				"type":            "stats",
-				"timestamp":       time.Now().Unix(),
-				"stats":           stats,
-				"currentEndpoint": currentEndpoint,
+				"type":      "stats",
+				"timestamp": time.Now().Unix(),
+				"stats":     stats,
+				//"currentEndpoint": currentEndpoint,
+				"blacks": blacks,
 			}
 
 			data, err := json.Marshal(event)

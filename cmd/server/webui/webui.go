@@ -2,7 +2,6 @@ package webui
 
 import (
 	"embed"
-	"io/fs"
 	"net/http"
 
 	"github.com/carbe/ccNexus/cmd/server/webui/api"
@@ -11,7 +10,7 @@ import (
 	"github.com/carbe/ccNexus/internal/storage"
 )
 
-//go:embed ui
+// go:embed ui
 var uiFS embed.FS
 
 // WebUI represents the web management interface
@@ -30,12 +29,12 @@ func New(cfg *config.Config, p *proxy.Proxy, storage *storage.PostgreSQLStorage)
 func (w *WebUI) RegisterRoutes(mux *http.ServeMux) error {
 	w.apiHandler.RegisterRoutes(mux)
 
-	uiSubFS, err := fs.Sub(uiFS, "ui")
-	if err != nil {
-		return err
-	}
-
-	uiHandler := http.FileServer(http.FS(uiSubFS))
+	//uiSubFS, err := fs.Sub(uiFS, "ui")
+	//if err != nil {
+	//	return err
+	//}
+	//uiHandler := http.FileServer(http.FS(uiSubFS))
+	uiHandler := http.FileServer(http.Dir("./ui"))
 	mux.Handle("/ui/", http.StripPrefix("/ui/", uiHandler))
 
 	mux.HandleFunc("/admin", func(w http.ResponseWriter, r *http.Request) {
