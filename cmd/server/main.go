@@ -68,8 +68,6 @@ func main() {
 		errCh <- p.StartWithMux(mux)
 	}()
 
-	logger.Info("ccNexus headless API listening on :%d (connStr: [hidden])", cfg.GetPort())
-
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 

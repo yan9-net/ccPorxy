@@ -98,7 +98,6 @@ func (p *Proxy) StartWithMux(customMux *http.ServeMux) error {
 	go p.startBlacklistCleaner()
 
 	logger.Info("ccNexus starting on port %d", port)
-	logger.Info("Configured %d endpoints", len(p.config.GetEndpoints()))
 
 	return p.server.ListenAndServe()
 }
