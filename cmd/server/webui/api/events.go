@@ -46,7 +46,18 @@ func (h *Handler) handleEvents(w http.ResponseWriter, r *http.Request) {
 			return
 		case <-ticker.C:
 			// Send stats update
-			stats := h.proxy.GetStats()
+			totalRequests, endpointStats := h.proxy.GetStats().GetStats()
+
+			// Calculate totals
+			totalErrors := 0
+			var totalInputTokens int64 = 0
+			var totalOutputTokens int64 = 0
+
+			for _, stats := range endpointStats {
+				totalErrors += stats.Errors
+				totalInputTokens += int64(stats.InputTokens)
+				totalOutputTokens += int64(stats.OutputTokens)
+			}
 
 			// Get current endpoint
 			//endpoints := h.config.GetEndpoints()
@@ -65,7 +76,13 @@ func (h *Handler) handleEvents(w http.ResponseWriter, r *http.Request) {
 			event := map[string]interface{}{
 				"type":      "stats",
 				"timestamp": time.Now().Unix(),
-				"stats":     stats,
+				"stats": map[string]interface{}{
+					"TotalRequests":     totalRequests,
+					"TotalErrors":       totalErrors,
+					"TotalInputTokens":  totalInputTokens,
+					"TotalOutputTokens": totalOutputTokens,
+					"Endpoints":         endpointStats,
+				},
 				//"currentEndpoint": currentEndpoint,
 				"blacks": blacks,
 			}
