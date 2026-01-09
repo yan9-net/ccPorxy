@@ -889,7 +889,6 @@ func (e *EndpointService) testMinimalRequest(apiUrl, apiKey, transformer, model 
 
 // FetchModels fetches available models from the API provider
 func (e *EndpointService) FetchModels(apiUrl, apiKey, transformer string) string {
-	logger.Info("Fetching models for transformer: %s", transformer)
 
 	if transformer == "" {
 		transformer = "claude"
@@ -936,7 +935,6 @@ func (e *EndpointService) FetchModels(apiUrl, apiKey, transformer string) string
 		"models":  models,
 	}
 	data, _ := json.Marshal(result)
-	logger.Info("Fetched %d models for %s", len(models), transformer)
 	return string(data)
 }
 

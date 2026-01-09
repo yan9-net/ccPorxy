@@ -356,4 +356,3 @@ func SendNotification(title, message string) error {
 	}
 	return beeep.Notify(title, message, "")
 }
-

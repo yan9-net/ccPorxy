@@ -40,8 +40,6 @@ func (h *Handler) handleEvents(w http.ResponseWriter, r *http.Request) {
 	// Listen for client disconnect
 	ctx := r.Context()
 
-	logger.Debug("[SSE] Client connected")
-
 	for {
 		select {
 		case <-ctx.Done():
