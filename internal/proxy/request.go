@@ -205,7 +205,7 @@ func buildProxyRequest(r *http.Request, endpoint config.Endpoint, transformedBod
 func sendRequest(ctx context.Context, proxyReq *http.Request, cfg *config.Config) (*http.Response, error) {
 	proxyReq = proxyReq.WithContext(ctx)
 	client := &http.Client{
-		Timeout: 10 * time.Second,
+		Timeout: 100 * time.Second,
 	}
 
 	// Apply proxy if configured
