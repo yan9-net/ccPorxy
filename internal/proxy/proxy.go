@@ -492,7 +492,8 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 				//处理一些不需要加入黑名单的情况
 				if strings.Contains(errMsg, " not found") ||
 					strings.Contains(errMsg, "No available Antigravity account") ||
-					strings.Contains(errMsg, "Please remove 'tools', 'tool_choice'") {
+					strings.Contains(errMsg, "Please remove 'tools', 'tool_choice'") ||
+					strings.Contains(errMsg, "Function timed out after") {
 					if longRetryCount < 5 {
 						logger.DebugLog("[%s][%s] Request failed %d: %s", endpoint.Name, proxyReq.RequestURI, resp.StatusCode, errMsg)
 						retryCount--

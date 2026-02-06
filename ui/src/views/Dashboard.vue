@@ -125,7 +125,9 @@ async function loadData() {
 }
 
 function renderChart() {
-    if (!chartRef.value) return;
+    if (!chartRef.value) {
+        return setTimeout(renderChart,150);
+    }
     if (chartInstance) chartInstance.destroy();
 
     const epStats = statsStore.daily.endpoints || {};
@@ -159,7 +161,7 @@ function renderChart() {
 
 function handleStatsUpdate(event) {
     if (event.detail.stats) {
-        statsStore.summary = event.detail.stats;
+        statsStore.summary.value = event.detail.stats;
     }
 }
 

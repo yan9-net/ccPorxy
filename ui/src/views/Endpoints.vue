@@ -26,7 +26,7 @@
         <div class="content-card">
             <div class="card-body">
                 <el-table :data="endpointsStore.endpoints" stripe v-loading="endpointsStore.loading">
-                    <el-table-column prop="name" label="名称" min-width="150">
+                    <el-table-column prop="name" label="名称" width="160">
                         <template #default="{ row }">
                             <div style="display: flex; align-items: center; gap: 8px;">
                                 <strong>{{ row.name }}</strong>
@@ -39,32 +39,40 @@
                             </div>
                         </template>
                     </el-table-column>
-                    <el-table-column prop="apiUrl" label="API URL" min-width="200">
+                    <el-table-column prop="apiUrl" label="API URL" width="260">
                         <template #default="{ row }">
-                            <el-tooltip :content="row.apiUrl" placement="top">
-                                <code style="font-size: 12px;">{{ truncateUrl(row.apiUrl) }}</code>
-                            </el-tooltip>
                             <el-button link @click="copyUrl(row.apiUrl)" style="margin-left: 8px;">
                                 <el-icon>
                                     <CopyDocument/>
                                 </el-icon>
                             </el-button>
+                            <el-tooltip :content="row.apiUrl" placement="top">
+                                <code style="font-size: 12px;">{{ truncateUrl(row.apiUrl, 30) }}</code>
+                            </el-tooltip>
                         </template>
                     </el-table-column>
-                    <el-table-column prop="transformer" label="转换器" width="150">
+                    <el-table-column>
+                        <template #header>
+                            <span>备注</span>
+                        </template>
+                        <template #default="{ row }">
+                            <span>{{ row.remark || "-" }}</span>
+                        </template>
+                    </el-table-column>
+                    <el-table-column prop="transformer" label="转换器" width="100">
                         <template #default="{ row }">
                             <el-tag>{{ getTransformerLabel(row.transformer) }}</el-tag>
                         </template>
                     </el-table-column>
-                    <el-table-column prop="model" label="模型" width="150">
+                    <el-table-column prop="model" label="模型" width="240">
                         <template #default="{ row }">{{ row.model || "-" }}</template>
                     </el-table-column>
-                    <el-table-column prop="priority" label="优先级" width="100">
+                    <el-table-column prop="priority" label="优先级" width="70">
                         <template #default="{ row }">
                             <el-tag type="info">{{ row.priority || 100 }}</el-tag>
                         </template>
                     </el-table-column>
-                    <el-table-column prop="enabled" label="状态" width="200">
+                    <el-table-column prop="enabled" label="状态" width="100">
                         <template #default="{ row }">
                             <div style="display: flex; flex-direction: column; gap: 4px;">
                                 <el-tag :type="row.enabled ? 'success' : 'danger'" size="small">
@@ -81,7 +89,7 @@
                             </div>
                         </template>
                     </el-table-column>
-                    <el-table-column label="操作" width="360" fixed="right">
+                    <el-table-column label="操作" width="230" fixed="right">
                         <template #default="{ row }">
                             <el-button-group size="small">
                                 <el-button @click="testEndpoint(row.name)" :loading="testingEndpoint === row.name">
@@ -182,11 +190,11 @@
 </template>
 
 <script setup>
-import {ref, onMounted, onUnmounted} from "vue";
-import {ElMessage, ElMessageBox} from "element-plus";
-import {useEndpointsStore} from "@/stores/endpoints";
-import {useAppStore} from "@/stores/app.js";
-import {getTransformerLabel, TRANSFORMER_OPTIONS} from "@/utils/constants";
+import { ref, onMounted, onUnmounted } from "vue";
+import { ElMessage, ElMessageBox } from "element-plus";
+import { useEndpointsStore } from "@/stores/endpoints";
+import { useAppStore } from "@/stores/app.js";
+import { getTransformerLabel, TRANSFORMER_OPTIONS } from "@/utils/constants";
 import * as endpointsApi from "@/api/endpoints";
 
 const endpointsStore = useEndpointsStore();
@@ -225,8 +233,8 @@ const rules = {
 let blacklistInterval = null;
 
 // Methods
-function truncateUrl(url) {
-    return url.length > 40 ? url.substring(0, 40) + "..." : url;
+function truncateUrl(url, len = 40) {
+    return url.length > len ? url.substring(0, len) + "..." : url;
 }
 
 async function loadEndpoints() {
@@ -398,7 +406,17 @@ function selectModel(row) {
 }
 
 function copyUrl(url) {
-    navigator.clipboard.writeText(url).then(() => ElMessage.success("已复制"));
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText(url).then(() => ElMessage.success("已复制"));
+    } else {
+        const textArea = document.createElement("textarea");
+        textArea.value = url;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textArea);
+        ElMessage.success("已复制");
+    }
 }
 
 async function removeFromBlacklist(name) {

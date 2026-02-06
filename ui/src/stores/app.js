@@ -38,7 +38,7 @@ export const useAppStore = defineStore("app", () => {
             try {
                 const data = JSON.parse(event.data);
                 if (data.type === "stats") {
-                    blacklist.value = data.blacklist || {};
+                    blacklist.value = data.blacks || {};
                     window.dispatchEvent(new CustomEvent("stats-update", {detail: data}));
                 }
             } catch (error) {
