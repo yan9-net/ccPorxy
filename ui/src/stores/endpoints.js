@@ -6,6 +6,8 @@ export const useEndpointsStore = defineStore("endpoints", () => {
     // State
     const endpoints = ref([]);
     const loading = ref(false);
+    const balanceMap = ref({}); // 存储各节点的余额信息
+    const usageMap = ref({}); // 存储各节点的使用记录
 
     // Actions
     async function fetchEndpoints() {
@@ -93,9 +95,33 @@ export const useEndpointsStore = defineStore("endpoints", () => {
         }
     }
 
+    async function fetchBalance(name) {
+        try {
+            const data = await endpointsApi.getEndpointBalance(name);
+            balanceMap.value[name] = data;
+            return data;
+        } catch (error) {
+            console.error("Failed to fetch balance:", error);
+            throw error;
+        }
+    }
+
+    async function fetchUsage(name, params) {
+        try {
+            const data = await endpointsApi.getEndpointUsage(name, params);
+            usageMap.value[name] = data;
+            return data;
+        } catch (error) {
+            console.error("Failed to fetch usage:", error);
+            throw error;
+        }
+    }
+
     return {
         endpoints,
         loading,
+        balanceMap,
+        usageMap,
         fetchEndpoints,
         createEndpoint,
         updateEndpoint,
@@ -103,6 +129,8 @@ export const useEndpointsStore = defineStore("endpoints", () => {
         toggleEndpoint,
         testEndpoint,
         fetchBlacklist,
-        removeFromBlacklist
+        removeFromBlacklist,
+        fetchBalance,
+        fetchUsage
     };
 });

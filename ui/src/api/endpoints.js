@@ -83,3 +83,17 @@ export function getBlacklistStatus() {
 export function removeFromBlacklist(name) {
     return request({url: `/endpoints/${encodeURIComponent(name)}/unblacklist`, method: "post"});
 }
+
+/**
+ * 获取节点账户余额
+ */
+export function getEndpointBalance(name) {
+    return request({url: `/endpoints/${encodeURIComponent(name)}/balance`, method: "get"});
+}
+
+/**
+ * 获取节点使用记录
+ */
+export function getEndpointUsage(name, params) {
+    return request({url: `/endpoints/${encodeURIComponent(name)}/usage`, method: "get", params});
+}

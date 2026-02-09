@@ -121,7 +121,7 @@ func (bm *BlacklistManager) GetBlacklistStatus() map[string]interface{} {
 			status[name] = map[string]interface{}{
 				"blacklisted": true,
 				"until":       until.Format(time.RFC3339),
-				"remaining":   until.Sub(time.Now()).String(),
+				"remaining":   int64(until.Sub(time.Now()).Seconds()),
 			}
 		}
 	}

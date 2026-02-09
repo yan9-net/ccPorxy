@@ -163,6 +163,10 @@ function handleStatsUpdate(event) {
     if (event.detail.stats) {
         statsStore.summary.value = event.detail.stats;
     }
+    if (event.detail.daily){
+        statsStore.daily.value = event.detail.daily;
+    }
+    renderChart();
 }
 
 // Lifecycle

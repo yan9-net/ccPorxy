@@ -72,6 +72,24 @@
                             <el-tag type="info">{{ row.priority || 100 }}</el-tag>
                         </template>
                     </el-table-column>
+                    <el-table-column label="账户余额" width="150">
+                        <template #default="{ row }">
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <span v-if="endpointsStore.balanceMap[row.name]">
+                                    {{ formatBalance(endpointsStore.balanceMap[row.name]) }}
+                                </span>
+                                <span v-else style="color: var(--el-text-color-secondary);">-</span>
+                                <el-button
+                                    size="small"
+                                    link
+                                    @click="fetchBalance(row.name)"
+                                    :loading="loadingBalance === row.name"
+                                    title="刷新余额">
+                                    <el-icon><Refresh/></el-icon>
+                                </el-button>
+                            </div>
+                        </template>
+                    </el-table-column>
                     <el-table-column prop="enabled" label="状态" width="100">
                         <template #default="{ row }">
                             <div style="display: flex; flex-direction: column; gap: 4px;">
@@ -89,7 +107,7 @@
                             </div>
                         </template>
                     </el-table-column>
-                    <el-table-column label="操作" width="230" fixed="right">
+                    <el-table-column label="操作" width="280" fixed="right">
                         <template #default="{ row }">
                             <el-button-group size="small">
                                 <el-button @click="testEndpoint(row.name)" :loading="testingEndpoint === row.name">
@@ -100,6 +118,7 @@
                                     @click="toggleEndpoint(row)">{{ row.enabled ? "禁用" : "启用" }}
                                 </el-button>
                                 <el-button @click="showEditDialog(row)">编辑</el-button>
+                                <el-button @click="showUsageDialog(row.name)" type="info">使用记录</el-button>
                                 <el-button type="danger" @click="deleteEndpoint(row.name)">删除</el-button>
                             </el-button-group>
                         </template>
@@ -186,6 +205,65 @@
                 </div>
             </div>
         </el-dialog>
+
+        <!-- Usage Records Dialog -->
+        <el-dialog v-model="usageDialogVisible" :title="`使用记录 - ${currentEndpointName}`" width="800px">
+            <div v-loading="loadingUsage">
+                <div style="margin-bottom: 16px; display: flex; gap: 12px; align-items: center;">
+                    <el-date-picker
+                        v-model="usageDateRange"
+                        type="daterange"
+                        range-separator="至"
+                        start-placeholder="开始日期"
+                        end-placeholder="结束日期"
+                        size="small"
+                        style="width: 280px;"
+                    />
+                    <el-button size="small" @click="fetchUsageRecords" :loading="loadingUsage">
+                        <el-icon><Refresh/></el-icon>
+                        刷新
+                    </el-button>
+                </div>
+
+                <el-table :data="currentUsageRecords" stripe max-height="400">
+                    <el-table-column prop="date" label="日期" width="120"/>
+                    <el-table-column prop="requests" label="请求次数" width="100">
+                        <template #default="{ row }">
+                            <el-tag type="info">{{ row.requests || 0 }}</el-tag>
+                        </template>
+                    </el-table-column>
+                    <el-table-column prop="inputTokens" label="输入Token" width="120">
+                        <template #default="{ row }">
+                            {{ formatNumber(row.inputTokens || 0) }}
+                        </template>
+                    </el-table-column>
+                    <el-table-column prop="outputTokens" label="输出Token" width="120">
+                        <template #default="{ row }">
+                            {{ formatNumber(row.outputTokens || 0) }}
+                        </template>
+                    </el-table-column>
+                    <el-table-column prop="totalTokens" label="总Token" width="120">
+                        <template #default="{ row }">
+                            {{ formatNumber(row.totalTokens || 0) }}
+                        </template>
+                    </el-table-column>
+                    <el-table-column prop="cost" label="费用" width="100">
+                        <template #default="{ row }">
+                            <span v-if="row.cost">{{ formatCurrency(row.cost) }}</span>
+                            <span v-else style="color: var(--el-text-color-secondary);">-</span>
+                        </template>
+                    </el-table-column>
+                </el-table>
+
+                <div v-if="currentUsageRecords.length === 0 && !loadingUsage" class="empty-state" style="padding: 40px;">
+                    <el-icon style="font-size: 48px; color: var(--el-text-color-secondary);">
+                        <Document/>
+                    </el-icon>
+                    <div class="empty-title">暂无使用记录</div>
+                    <div class="empty-desc">该节点在所选时间范围内没有使用记录</div>
+                </div>
+            </div>
+        </el-dialog>
     </div>
 </template>
 
@@ -212,6 +290,12 @@ const modelDialogVisible = ref(false);
 const availableModels = ref([]);
 const fetchingModels = ref(false);
 const testStatusMap = ref({});
+const loadingBalance = ref(null);
+const usageDialogVisible = ref(false);
+const currentEndpointName = ref("");
+const currentUsageRecords = ref([]);
+const loadingUsage = ref(false);
+const usageDateRange = ref([]);
 
 const form = ref({
     name: "",
@@ -425,6 +509,69 @@ async function removeFromBlacklist(name) {
         ElMessage.success("已从小黑屋移除: " + name);
     } catch (error) {
         ElMessage.error("移除失败: " + error.message);
+    }
+}
+
+async function fetchBalance(name) {
+    loadingBalance.value = name;
+    try {
+        await endpointsStore.fetchBalance(name);
+        ElMessage.success("余额已更新");
+    } catch (error) {
+        ElMessage.error("获取余额失败: " + error.message);
+    } finally {
+        loadingBalance.value = null;
+    }
+}
+
+function formatBalance(balance) {
+    if (!balance) return "-";
+    if (balance.amount !== undefined) {
+        return `$${balance.amount.toFixed(2)}`;
+    }
+    if (balance.credits !== undefined) {
+        return `${balance.credits} 积分`;
+    }
+    return JSON.stringify(balance);
+}
+
+function formatNumber(num) {
+    return num.toLocaleString();
+}
+
+function formatCurrency(amount) {
+    return `$${amount.toFixed(2)}`;
+}
+
+function showUsageDialog(name) {
+    currentEndpointName.value = name;
+    usageDialogVisible.value = true;
+    // 默认查询最近30天
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - 30);
+    usageDateRange.value = [startDate, endDate];
+    fetchUsageRecords();
+}
+
+async function fetchUsageRecords() {
+    if (!currentEndpointName.value) return;
+
+    loadingUsage.value = true;
+    try {
+        const params = {};
+        if (usageDateRange.value && usageDateRange.value.length === 2) {
+            params.startDate = usageDateRange.value[0].toISOString().split('T')[0];
+            params.endDate = usageDateRange.value[1].toISOString().split('T')[0];
+        }
+
+        const data = await endpointsStore.fetchUsage(currentEndpointName.value, params);
+        currentUsageRecords.value = data.records || [];
+    } catch (error) {
+        ElMessage.error("获取使用记录失败: " + error.message);
+        currentUsageRecords.value = [];
+    } finally {
+        loadingUsage.value = false;
     }
 }
 

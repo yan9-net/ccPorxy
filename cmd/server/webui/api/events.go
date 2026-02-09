@@ -73,6 +73,36 @@ func (h *Handler) handleEvents(w http.ResponseWriter, r *http.Request) {
 
 			blacks := h.proxy.GetBlacklistStatus()
 
+			today := time.Now().Format("2006-01-02")
+			yesterday := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
+			todayStats, err := h.getStatsForPeriod(today, today)
+			yesterdayStats, err := h.getStatsForPeriod(yesterday, yesterday)
+			// Calculate changes
+			daily := map[string]interface{}{
+				"todayVsYesterday": map[string]interface{}{
+					"requests": map[string]interface{}{
+						"today":     todayStats["totalRequests"],
+						"yesterday": yesterdayStats["totalRequests"],
+						"change":    calculatePercentChange(yesterdayStats["totalRequests"].(int), todayStats["totalRequests"].(int)),
+					},
+					"errors": map[string]interface{}{
+						"today":     todayStats["totalErrors"],
+						"yesterday": yesterdayStats["totalErrors"],
+						"change":    calculatePercentChange(yesterdayStats["totalErrors"].(int), todayStats["totalErrors"].(int)),
+					},
+					"inputTokens": map[string]interface{}{
+						"today":     todayStats["totalInputTokens"],
+						"yesterday": yesterdayStats["totalInputTokens"],
+						"change":    calculatePercentChange(int(yesterdayStats["totalInputTokens"].(int64)), int(todayStats["totalInputTokens"].(int64))),
+					},
+					"outputTokens": map[string]interface{}{
+						"today":     todayStats["totalOutputTokens"],
+						"yesterday": yesterdayStats["totalOutputTokens"],
+						"change":    calculatePercentChange(int(yesterdayStats["totalOutputTokens"].(int64)), int(todayStats["totalOutputTokens"].(int64))),
+					},
+				},
+			}
+
 			event := map[string]interface{}{
 				"type":      "stats",
 				"timestamp": time.Now().Unix(),
@@ -85,6 +115,7 @@ func (h *Handler) handleEvents(w http.ResponseWriter, r *http.Request) {
 				},
 				//"currentEndpoint": currentEndpoint,
 				"blacks": blacks,
+				"daily":  daily,
 			}
 
 			data, err := json.Marshal(event)
